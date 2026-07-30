@@ -26,20 +26,26 @@
     font-weight: 300; letter-spacing: 0.08em;
     color: rgba(255,255,255,0.45);
   }
+  p.soon {
+    font-size: clamp(0.7rem, 1.5vw, 1.1rem);
+    color: rgba(200,200,200,0.28);
+    margin-top: 0.5em;
+  }
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
 <div class="overlay">
   <h1>zirkle</h1>
-  <p>we come full zirkle&nbsp;&nbsp;soon™</p>
+  <p>we come full zirkle</p>
+  <p class="soon">soon™</p>
 </div>
 
 <script>
 const canvas = document.getElementById('c');
 const gl = canvas.getContext('webgl2', { antialias: true });
 if (!gl) {
-  document.querySelector('.overlay').innerHTML = '<p style="color:#fff">WebGL 2 needed</p>';
+  document.querySelector('.overlay p').textContent = 'WebGL 2 needed';
 }
 
 let mouseX = 0.5, mouseY = 0.5;
@@ -107,11 +113,14 @@ void main() {
   vec2 uv = gl_FragCoord.xy / uRes;
   vec2 center = vec2(0.5, 0.5);
 
-  // Circle radius — ~85% of shortest dimension
+  // Aspect scale so the ring stays circular, sized by shortest dimension
+  vec2 asp = uRes / min(uRes.x, uRes.y);
+
+  // Ring radius — relative to shortest dimension
   float radius = 0.42;
 
   // Distance from center
-  float dist = length(uv - center);
+  float dist = length((uv - center) * asp);
 
   // Mouse influence — smooth falloff
   float mouseDist = length(uv - uMouse);
@@ -130,29 +139,26 @@ void main() {
     (fbm(uv * 7.0 + uTime * 0.2 + 2.3) * 0.5 - 0.25) * displaceStrength
   );
 
-  float distortedDist = length(distortedUV - center);
+  float distortedDist = length((distortedUV - center) * asp);
 
-  // Edge: soft circle with breathing radius
-  float edge = smoothstep(radius * breathe + 0.03, radius * breathe - 0.03, distortedDist);
+  // Slim ring: distance to the circle line, not the disc
+  float ringDist = abs(distortedDist - radius * breathe);
+  float edge = smoothstep(0.006, 0.002, ringDist);
 
-  // Outer glow
-  float glow = exp(-distortedDist * 6.0) * 0.15;
+  // Soft aura hugging the ring
+  float glow = exp(-ringDist * 45.0) * 0.3;
 
-  // Inner subtle gradient
-  float innerGrad = 1.0 - smoothstep(0.0, radius * breathe * 0.7, distortedDist);
-  innerGrad = innerGrad * 0.08;
+  // Blur halo around ring when mouse near
+  float blurHalo = uMouseOver * exp(-ringDist * 25.0) * 0.25;
 
-  // Blur halo around circle edge when mouse near
-  float blurHalo = uMouseOver * exp(-abs(distortedDist - radius * breathe) * 25.0) * 0.25;
-
-  // Base circle color — warm off-white
+  // Ring color — warm off-white
   vec3 circleColor = vec3(0.96, 0.94, 0.90);
 
   // Dark background with subtle noise texture
   vec3 bgColor = vec3(0.04, 0.04, 0.05) + noise(uv * 300.0 + uTime * 0.1) * 0.015;
 
-  // Assemble: circle edge determines mix
-  float circleMask = edge + glow + innerGrad + blurHalo;
+  // Assemble: ring edge determines mix
+  float circleMask = edge + glow + blurHalo;
   vec3 color = mix(bgColor, circleColor, clamp(circleMask, 0.0, 1.0));
 
   // Subtle vignette
