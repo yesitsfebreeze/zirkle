@@ -43,198 +43,224 @@
 
 <script>
 const canvas = document.getElementById('c');
-const gl = canvas.getContext('webgl2', { antialias: true });
+const gl = canvas.getContext('webgl2', { antialias: false, alpha: false });
 if (!gl) {
   document.querySelector('.overlay p').textContent = 'WebGL 2 needed';
 }
 
-let mouseX = 0.5, mouseY = 0.5;
-let targetMX = 0.5, targetMY = 0.5;
-let mouseOver = false;
-
-canvas.addEventListener('mousemove', e => {
-  targetMX = e.clientX / canvas.width;
-  targetMY = 1.0 - e.clientY / canvas.height;
-});
-canvas.addEventListener('mouseenter', () => { mouseOver = true; });
-canvas.addEventListener('mouseleave', () => { mouseOver = false; });
-
-// Touch
-canvas.addEventListener('touchmove', e => {
-  e.preventDefault();
-  targetMX = e.touches[0].clientX / canvas.width;
-  targetMY = 1.0 - e.touches[0].clientY / canvas.height;
-  mouseOver = true;
-}, { passive: false });
-canvas.addEventListener('touchend', () => { mouseOver = false; });
+const DPR = Math.min(window.devicePixelRatio || 1, 3);
+const N = 6000;
 
 const vertSrc = `#version 300 es
 in vec2 aPos;
-void main() { gl_Position = vec4(aPos, 0.0, 1.0); }
-`;
+uniform vec2 uRes;
+uniform float uSize;
+void main() {
+  vec2 clip = (aPos / uRes) * 2.0 - 1.0;
+  gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);
+  gl_PointSize = uSize;
+}`;
 
 const fragSrc = `#version 300 es
 precision highp float;
 out vec4 fragColor;
-
-uniform vec2 uRes;
-uniform vec2 uMouse;     // normalized [0,1]
-uniform float uTime;
-uniform float uMouseOver; // 0.0 or 1.0
-
-// Smooth noise
-float hash(vec2 p) {
-  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
-}
-
-float noise(vec2 p) {
-  vec2 i = floor(p);
-  vec2 f = fract(p);
-  f = f * f * (3.0 - 2.0 * f);
-  return mix(
-    mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x),
-    mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x),
-    f.y
-  );
-}
-
-float fbm(vec2 p) {
-  float v = 0.0, a = 0.5;
-  vec2 shift = vec2(100.0);
-  for (int i = 0; i < 5; i++) {
-    v += a * noise(p);
-    p = p * 2.0 + shift;
-    a *= 0.5;
-  }
-  return v;
-}
-
 void main() {
-  vec2 uv = gl_FragCoord.xy / uRes;
-  vec2 center = vec2(0.5, 0.5);
+  float d = length(gl_PointCoord - 0.5);
+  float a = smoothstep(0.5, 0.15, d);
+  fragColor = vec4(vec3(0.96, 0.94, 0.90) * a, a);
+}`;
 
-  // Aspect scale so the ring stays circular, sized by shortest dimension
-  vec2 asp = uRes / min(uRes.x, uRes.y);
-
-  // Ring radius — relative to shortest dimension
-  float radius = 0.42;
-
-  // Distance from center
-  float dist = length((uv - center) * asp);
-
-  // Mouse influence — smooth falloff
-  float mouseDist = length(uv - uMouse);
-  float mouseInfluence = uMouseOver * exp(-mouseDist * 4.5);
-
-  // Idle breathing
-  float breathe = 1.0 + 0.015 * sin(uTime * 1.3) + 0.01 * sin(uTime * 2.1 + 1.7);
-
-  // Distortion: displace uv based on mouse proximity + noise
-  float noiseVal = fbm(uv * 6.0 + uTime * 0.15) * 0.5 + 0.5;
-  float displaceStrength = mouseInfluence * 0.06 + 0.003 * (1.0 + sin(uTime * 0.7) * 0.5);
-
-  vec2 distortedUV = uv;
-  distortedUV += vec2(
-    (noiseVal - 0.5) * displaceStrength,
-    (fbm(uv * 7.0 + uTime * 0.2 + 2.3) * 0.5 - 0.25) * displaceStrength
-  );
-
-  float distortedDist = length((distortedUV - center) * asp);
-
-  // Slim ring: distance to the circle line, not the disc
-  float ringDist = abs(distortedDist - radius * breathe);
-  float edge = smoothstep(0.006, 0.002, ringDist);
-
-  // Soft aura hugging the ring
-  float glow = exp(-ringDist * 45.0) * 0.3;
-
-  // Blur halo around ring when mouse near
-  float blurHalo = uMouseOver * exp(-ringDist * 25.0) * 0.25;
-
-  // Ring color — warm off-white
-  vec3 circleColor = vec3(0.96, 0.94, 0.90);
-
-  // Dark background with subtle noise texture
-  vec3 bgColor = vec3(0.04, 0.04, 0.05) + noise(uv * 300.0 + uTime * 0.1) * 0.015;
-
-  // Assemble: ring edge determines mix
-  float circleMask = edge + glow + blurHalo;
-  vec3 color = mix(bgColor, circleColor, clamp(circleMask, 0.0, 1.0));
-
-  // Subtle vignette
-  float vignette = 1.0 - length(uv - 0.5) * 0.6;
-  color *= vignette;
-
-  fragColor = vec4(color, 1.0);
+function compile(type, src) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+  return s;
 }
-`;
+const prog = gl.createProgram();
+gl.attachShader(prog, compile(gl.VERTEX_SHADER, vertSrc));
+gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, fragSrc));
+gl.linkProgram(prog);
+gl.useProgram(prog);
+const uRes = gl.getUniformLocation(prog, 'uRes');
+const uSize = gl.getUniformLocation(prog, 'uSize');
 
-function compileShader(type, src) {
-  const shader = gl.createShader(type);
-  gl.shaderSource(shader, src);
-  gl.compileShader(shader);
-  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-    console.error(gl.getShaderInfoLog(shader));
-    gl.deleteShader(shader);
-    return null;
+gl.enable(gl.BLEND);
+gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+
+// Particle state — flat arrays, canvas-pixel units
+const pos = new Float32Array(N * 2);
+const vel = new Float32Array(N * 2);
+const home = new Float32Array(N * 2);   // rest position on the ring (unit breathe)
+const jitter = new Float32Array(N);     // radial offset from ring line
+const angle = new Float32Array(N);
+
+const vbo = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+gl.bufferData(gl.ARRAY_BUFFER, pos, gl.DYNAMIC_DRAW);
+gl.enableVertexAttribArray(0);
+gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+let W = 0, H = 0, CX = 0, CY = 0, R = 0;
+
+function layout() {
+  W = canvas.clientWidth * DPR;
+  H = canvas.clientHeight * DPR;
+  canvas.width = W;
+  canvas.height = H;
+  gl.viewport(0, 0, W, H);
+  CX = W / 2; CY = H / 2;
+  R = Math.min(W, H) * 0.42;
+  for (let i = 0; i < N; i++) {
+    const a = angle[i], r = R + jitter[i] * DPR;
+    home[i*2]   = CX + Math.cos(a) * r;
+    home[i*2+1] = CY + Math.sin(a) * r;
   }
-  return shader;
 }
 
-const vShader = compileShader(gl.VERTEX_SHADER, vertSrc);
-const fShader = compileShader(gl.FRAGMENT_SHADER, fragSrc);
-const program = gl.createProgram();
-gl.attachShader(program, vShader);
-gl.attachShader(program, fShader);
-gl.linkProgram(program);
-if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-  console.error(gl.getProgramInfoLog(program));
+// Seed: even angles + gaussian radial jitter = slim fuzzy ring
+for (let i = 0; i < N; i++) {
+  angle[i] = (i / N) * Math.PI * 2 + Math.random() * 0.002;
+  let g = 0;
+  for (let k = 0; k < 4; k++) g += Math.random();
+  jitter[i] = (g / 2 - 1) * 4.0; // ~±4 css px, bell-shaped
 }
-
-const uRes = gl.getUniformLocation(program, 'uRes');
-const uMouse = gl.getUniformLocation(program, 'uMouse');
-const uTime = gl.getUniformLocation(program, 'uTime');
-const uMouseOver = gl.getUniformLocation(program, 'uMouseOver');
-
-// Fullscreen quad
-const buf = gl.createBuffer();
-gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-  -1, -1,  1, -1,  -1, 1,
-  -1,  1,  1, -1,   1, 1,
-]), gl.STATIC_DRAW);
-
-const aPos = gl.getAttribLocation(program, 'aPos');
-gl.enableVertexAttribArray(aPos);
-gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
-
-function resize() {
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  canvas.width = canvas.clientWidth * dpr;
-  canvas.height = canvas.clientHeight * dpr;
-  gl.viewport(0, 0, canvas.width, canvas.height);
+layout();
+for (let i = 0; i < N; i++) {
+  pos[i*2] = home[i*2];
+  pos[i*2+1] = home[i*2+1];
 }
-window.addEventListener('resize', resize);
-resize();
+window.addEventListener('resize', layout);
 
-const startTime = performance.now();
+// Mouse — canvas-pixel coords
+let mx = -1e6, my = -1e6, mouseOver = false;
+canvas.addEventListener('mousemove', e => { mx = e.clientX * DPR; my = e.clientY * DPR; mouseOver = true; });
+canvas.addEventListener('mouseleave', () => { mouseOver = false; });
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  mx = e.touches[0].clientX * DPR; my = e.touches[0].clientY * DPR; mouseOver = true;
+}, { passive: false });
+canvas.addEventListener('touchend', () => { mouseOver = false; });
 
-function render(now) {
-  // Smooth mouse follow
-  const smooth = 0.08;
-  mouseX += (targetMX - mouseX) * smooth;
-  mouseY += (targetMY - mouseY) * smooth;
-
-  gl.useProgram(program);
-  gl.uniform2f(uRes, canvas.width, canvas.height);
-  gl.uniform2f(uMouse, mouseX, mouseY);
-  gl.uniform1f(uTime, (now - startTime) * 0.001);
-  gl.uniform1f(uMouseOver, mouseOver ? 1.0 : 0.0);
-  gl.drawArrays(gl.TRIANGLES, 0, 6);
-  requestAnimationFrame(render);
+// Spatial grid for boid neighbors — rebuilt each frame, linked lists
+const CELL = 10 * DPR;
+let gw = 0, gh = 0, head = null;
+const next = new Int32Array(N);
+function gridResize() {
+  gw = Math.ceil(W / CELL) + 1;
+  gh = Math.ceil(H / CELL) + 1;
+  head = new Int32Array(gw * gh);
 }
+gridResize();
+window.addEventListener('resize', gridResize);
 
-requestAnimationFrame(render);
+let cvx = new Float32Array(1), cvy = new Float32Array(1), cnt = new Int32Array(1);
+function cellBuffers() {
+  cvx = new Float32Array(gw * gh);
+  cvy = new Float32Array(gw * gh);
+  cnt = new Int32Array(gw * gh);
+}
+cellBuffers();
+window.addEventListener('resize', cellBuffers);
+
+const SEP_R = 3.5 * DPR, SEP_R2 = SEP_R * SEP_R;
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min((now - last) / 1000, 0.033);
+  last = now;
+  const t = now / 1000;
+
+  // Breathing ring: homes scale gently around center
+  const breathe = 1.0 + 0.015 * Math.sin(t * 1.3) + 0.01 * Math.sin(t * 2.1 + 1.7);
+
+  // Bubbly repulsion sphere: radius pulses like a soap bubble
+  const bubR = (110 + 10 * Math.sin(t * 3.1) + 6 * Math.sin(t * 5.7)) * DPR;
+  const bubR2 = bubR * bubR;
+
+  // Pass 1: bin particles + per-cell velocity sums (alignment source)
+  head.fill(-1); cnt.fill(0); cvx.fill(0); cvy.fill(0);
+  for (let i = 0; i < N; i++) {
+    const cx = (pos[i*2] / CELL) | 0, cy = (pos[i*2+1] / CELL) | 0;
+    if (cx < 0 || cy < 0 || cx >= gw || cy >= gh) continue;
+    const c = cy * gw + cx;
+    next[i] = head[c]; head[c] = i;
+    cvx[c] += vel[i*2]; cvy[c] += vel[i*2+1]; cnt[c]++;
+  }
+
+  const damp = Math.exp(-dt * 5.0);
+  for (let i = 0; i < N; i++) {
+    const px = pos[i*2], py = pos[i*2+1];
+    let fx = 0, fy = 0;
+
+    // Boid: arrival — steer toward home, stronger when farther
+    const hx = CX + (home[i*2] - CX) * breathe;
+    const hy = CY + (home[i*2+1] - CY) * breathe;
+    fx += (hx - px) * 40.0;
+    fy += (hy - py) * 40.0;
+
+    // Boid: separation — push off close neighbors (3×3 cells)
+    const cx = (px / CELL) | 0, cy = (py / CELL) | 0;
+    let alvx = 0, alvy = 0, aln = 0;
+    for (let oy = -1; oy <= 1; oy++) {
+      const yy = cy + oy;
+      if (yy < 0 || yy >= gh) continue;
+      for (let ox = -1; ox <= 1; ox++) {
+        const xx = cx + ox;
+        if (xx < 0 || xx >= gw) continue;
+        const c = yy * gw + xx;
+        alvx += cvx[c]; alvy += cvy[c]; aln += cnt[c];
+        for (let j = head[c]; j !== -1; j = next[j]) {
+          if (j === i) continue;
+          const dx = px - pos[j*2], dy = py - pos[j*2+1];
+          const d2 = dx*dx + dy*dy;
+          if (d2 > 1e-4 && d2 < SEP_R2) {
+            const inv = 1.0 / Math.sqrt(d2);
+            const w = (1.0 - d2 / SEP_R2);
+            fx += dx * inv * w * 80.0;
+            fy += dy * inv * w * 80.0;
+          }
+        }
+      }
+    }
+
+    // Boid: alignment — ease toward neighborhood average velocity
+    if (aln > 1) {
+      fx += ((alvx / aln) - vel[i*2]) * 2.0;
+      fy += ((alvy / aln) - vel[i*2+1]) * 2.0;
+    }
+
+    // Bubble: radial shove away from cursor, soft spherical falloff
+    if (mouseOver) {
+      const dx = px - mx, dy = py - my;
+      const d2 = dx*dx + dy*dy;
+      if (d2 < bubR2) {
+        const d = Math.sqrt(d2) || 1;
+        const w = 1.0 - d / bubR;
+        const shove = w * w * 26000.0;
+        fx += (dx / d) * shove;
+        fy += (dy / d) * shove;
+      }
+    }
+
+    let vx = (vel[i*2] + fx * dt) * damp;
+    let vy = (vel[i*2+1] + fy * dt) * damp;
+    vel[i*2] = vx; vel[i*2+1] = vy;
+    pos[i*2] = px + vx * dt;
+    pos[i*2+1] = py + vy * dt;
+  }
+
+  gl.clearColor(0.04, 0.04, 0.05, 1.0);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.uniform2f(uRes, W, H);
+  gl.uniform1f(uSize, 2.4 * DPR);
+  gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+  gl.bufferSubData(gl.ARRAY_BUFFER, 0, pos);
+  gl.drawArrays(gl.POINTS, 0, N);
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
 </script>
 </body>
 </html>
