@@ -265,8 +265,6 @@
         accX,
         accY,
         speedBuf;
-      let esc = null, // per-dot escape timer — sparks off the ring
-        escAcc = 0;
       // The wanderer — a single point roaming the grid, its influence
       // propagating outward through the lattice
 
@@ -615,7 +613,6 @@
         accX = new Float32Array(N);
         accY = new Float32Array(N);
         speedBuf = new Float32Array(N);
-        esc = new Float32Array(N);
         const cw = W / cols,
           ch = H / rows;
         cellW = cw;
@@ -643,11 +640,6 @@
             cellDot[k] = k;
             pos[k * 2] = homeX[k];
             pos[k * 2 + 1] = homeY[k];
-            // Two coherent counter-rotating halves, split top/bottom.
-            // A checkerboard also gives a 50/50 split but puts opposing
-            // dots side by side, which shears the flock apart — boid
-            // alignment can only read as unison within a contiguous group
-            dirn[k] = homeY[k] < CY ? 1 : -1;
             let g = 0;
             for (let q = 0; q < 4; q++) g += Math.random();
             jit[k] = (g / 2 - 1) * 5 * DPR; // orbit band spread — tight ring
@@ -664,8 +656,16 @@
         const order = Array.from({ length: N }, (_, k) => k).sort(
           (a, b) => ang[a] - ang[b],
         );
-        for (let r = 0; r < N; r++)
+        for (let r = 0; r < N; r++) {
           ang[order[r]] = (r / N) * Math.PI * 2 - Math.PI;
+          // Direction alternates by arc rank, so the two streams are
+          // interleaved evenly around the whole circumference rather
+          // than owning one half each. Contiguous halves counter-rotate
+          // away from each other at one seam and open a gap there; with
+          // every slot's neighbours running opposite, the ring stays
+          // uniformly populated at every bearing.
+          dirn[order[r]] = r & 1 ? 1 : -1;
+        }
 
         allocLinkArrays();
         initLinks();
@@ -811,27 +811,6 @@
           linkLifeStep();
         }
 
-        // Sparks: at full vortex, random dots shoot off the ring on a
-        // ballistic arc, then the arrival step reels them back in.
-        // Rate now DECAYS toward the centre — it used to climb with cs,
-        // which is exactly what produced stragglers at full depth
-        escAcc += dt * (vm > 0.7 ? 26 * (1 - cs) : 0);
-        while (escAcc >= 1) {
-          escAcc -= 1;
-          const i = (Math.random() * N) | 0;
-          if (esc[i] > 0) continue;
-          const rx = pos[i * 2] - CX,
-            ry = pos[i * 2 + 1] - CY;
-          const rr = Math.hypot(rx, ry) + 1e-3;
-          // Sparks fire INWARD — they populate the disc as a noise field
-          const aOff =
-            Math.atan2(ry, rx) + Math.PI + (Math.random() - 0.5) * 1.2;
-          const kick = (500 + Math.random() * 900) * DPR;
-          vel[i * 2] += Math.cos(aOff) * kick;
-          vel[i * 2 + 1] += Math.sin(aOff) * kick;
-          esc[i] = 0.45 + Math.random() * 0.65;
-        }
-
         // Thinking links: fixed count, always on screen — the deeper
         // into the vortex core, the shorter each link's life, so the
         // same 80 lines re-fire faster instead of the count growing
@@ -865,9 +844,10 @@
         // Separation survives at depth: it used to fall to 8% at the
         // centre, which is why dots stopped avoiding each other there
         const sepK = (80 + vm * 340) * (1 - cs * 0.45) * DPR;
-        // Boid alignment climbs toward the centre so each half locks
-        // into one motion instead of drifting independently
-        const alignK = vm * (13 + cs * 22);
+        // Alignment stays modest: with neighbouring slots counter-
+        // rotating, a high gain just has the two streams cancel each
+        // other out instead of reading as unison
+        const alignK = vm * 13;
         for (let cy = 0; pairOn && cy < gh; cy++) {
           for (let cx = 0; cx < gw; cx++) {
             for (let i = head[cy * gw + cx]; i >= 0; i = nxt[i]) {
@@ -998,7 +978,7 @@
 
           // Track the moving slot: match its tangential velocity so the
           // stream carries no lag at full vortex
-          if (vm > 0.001 && esc[i] <= 0) {
+          if (vm > 0.001) {
             const sv = tspd[i] * spinS * dirn[i] * vm;
             fx += (-sa * sv - vel[i * 2]) * 18 * vm;
             fy += (ca * sv - vel[i * 2 + 1]) * 18 * vm;
@@ -1008,19 +988,6 @@
             const cf = wAng * wAng * tr;
             fx -= ca * cf;
             fy -= sa * cf;
-          } else if (vm > 0.001 && esc[i] > 0) {
-            // Interior noise field: escaped dots swirl circularly around
-            // the center (half CW, half CCW), contained inside the ring
-            const rxE = px - CX,
-              ryE = py - CY;
-            const rE = Math.hypot(rxE, ryE) + 1e-3;
-            const swirl = 1100 * DPR * vm;
-            fx += (-ryE / rE) * dirn[i] * swirl;
-            fy += (rxE / rE) * dirn[i] * swirl;
-            if (rE > R * 0.92) {
-              fx -= (rxE / rE) * 2600 * DPR * vm;
-              fy -= (ryE / rE) * 2600 * DPR * vm;
-            }
           }
 
           // Mouse gravity — stronger the closer the mouse is to center
@@ -1064,18 +1031,13 @@
           // step toward the target — never overshoots, uniform timing
           let nxp = px + vx * dt,
             nyp = py + vy * dt;
-          let ka = 1 - Math.exp(-dt * arrRate);
-          if (esc[i] > 0) {
-            // Deeper in, sparks are reeled back sooner
-            esc[i] -= dt * (1 + cs * 6);
-            ka *= 0.1; // escaping: nearly free flight, then reeled back
-          }
+          const ka = 1 - Math.exp(-dt * arrRate);
           nxp += (tgx - nxp) * ka;
           nyp += (tgy - nyp) * ka;
           // Radial-only projection: at full depth, pin the dot to its
           // target radius (tangential motion untouched — turbulence
           // stays alive along the line, the line itself goes razor)
-          if (vm > 0.5 && esc[i] <= 0) {
+          if (vm > 0.5) {
             const rrx = nxp - CX,
               rry = nyp - CY;
             const rl = Math.hypot(rrx, rry) + 1e-3;
