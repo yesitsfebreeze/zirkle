@@ -1,0 +1,4 @@
+page/
+.splinter/
+.kern/
+.mcp.json

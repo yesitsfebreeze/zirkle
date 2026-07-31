@@ -1,4 +1,5 @@
 # CHANGELOG
+- 2026-07-31: fix Pages build (remove broken page gitlink, untrack .splinter), deploy latest particle-field index.html
 
 ## 2025-07-30 — fast orbital + hard bubble
 

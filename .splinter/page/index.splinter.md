@@ -1,2 +1,0 @@
-# splinter: page/index.html
-

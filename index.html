@@ -1,266 +1,1102 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>zirkle</title>
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0a0a; }
-  canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; }
-  .overlay {
-    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    pointer-events: none; z-index: 10;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  }
-  h1 {
-    font-size: clamp(3rem, 10vw, 8rem);
-    font-weight: 300; letter-spacing: 0.06em;
-    color: rgba(255,255,255,0.92);
-    text-shadow: 0 0 80px rgba(255,255,255,0.15);
-    margin-bottom: 0.25em;
-  }
-  p {
-    font-size: clamp(0.85rem, 2vw, 1.4rem);
-    font-weight: 300; letter-spacing: 0.08em;
-    color: rgba(255,255,255,0.45);
-  }
-  p.soon {
-    font-size: clamp(0.7rem, 1.5vw, 1.1rem);
-    color: rgba(200,200,200,0.28);
-    margin-top: 0.5em;
-  }
-</style>
-</head>
-<body>
-<canvas id="c"></canvas>
-<div class="overlay">
-  <h1>zirkle</h1>
-  <p>we come full zirkle</p>
-  <p class="soon">soon™</p>
-</div>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>zirkle</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #0a0a0a;
+        cursor: none;
+      }
+      canvas {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+      }
+      .cursor {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 28px;
+        height: 28px;
+        border: 1.5px solid rgba(255, 255, 255, 0.55);
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0);
+        pointer-events: none;
+        z-index: 20;
+        opacity: 0;
+        transition:
+          opacity 0.2s,
+          background-color 0.6s ease-out;
+        will-change: transform;
+      }
+      .overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+        z-index: 10;
+        font-family:
+          "Barlow Condensed",
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+      }
+      h1 {
+        font-size: clamp(3rem, 10vw, 8rem);
+        font-weight: 300;
+        letter-spacing: 0.06em;
+        color: rgba(255, 255, 255, 0.92);
+        text-shadow: 0 0 80px rgba(255, 255, 255, 0.15);
+        margin-bottom: 0.25em;
+      }
+      p {
+        font-size: clamp(0.85rem, 2vw, 1.4rem);
+        font-weight: 300;
+        letter-spacing: 0.08em;
+        color: rgba(255, 255, 255, 0.45);
+      }
+      p.soon {
+        font-size: clamp(0.7rem, 1.5vw, 1.1rem);
+        color: rgba(200, 200, 200, 0.28);
+        margin-top: 0.5em;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="c"></canvas>
+    <div class="cursor" id="cur"></div>
+    <div class="overlay">
+      <h1>zirkle</h1>
+      <p>we come full zirkle</p>
+      <p class="soon">soon™</p>
+    </div>
 
-<script>
-const canvas = document.getElementById('c');
-const gl = canvas.getContext('webgl2', { antialias: false, alpha: false });
-if (!gl) {
-  document.querySelector('.overlay p').textContent = 'WebGL 2 needed';
-}
+    <script>
+      const canvas = document.getElementById("c");
+      const gl = canvas.getContext("webgl2", {
+        antialias: false,
+        alpha: false,
+        preserveDrawingBuffer: true,
+      });
+      if (!gl) {
+        document.querySelector(".overlay p").textContent = "WebGL 2 needed";
+      }
 
-const DPR = Math.min(window.devicePixelRatio || 1, 3);
-const N = 6000;
+      const DPR = Math.min(window.devicePixelRatio || 1, 3);
 
-const vertSrc = `#version 300 es
-in vec2 aPos;
-uniform vec2 uRes;
-uniform float uSize;
-void main() {
-  vec2 clip = (aPos / uRes) * 2.0 - 1.0;
-  gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);
-  gl_PointSize = uSize;
-}`;
+      const vertSrc = `#version 300 es
+      in vec2 aPos;
+      in float aSpeed;
+      uniform vec2 uRes;
+      uniform float uSize;
+      out float vSpeed;
+      void main() {
+        vec2 clip = (aPos / uRes) * 2.0 - 1.0;
+        gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);
+        gl_PointSize = uSize;
+        vSpeed = aSpeed;
+      }`;
 
-const fragSrc = `#version 300 es
-precision highp float;
-out vec4 fragColor;
-void main() {
-  float d = length(gl_PointCoord - 0.5);
-  float a = smoothstep(0.5, 0.15, d);
-  fragColor = vec4(vec3(0.96, 0.94, 0.90) * a, a);
-}`;
+      const fragSrc = `#version 300 es
+      precision highp float;
+      in float vSpeed;
+      uniform float uAb; // chromatic aberration: 1 = grid neon, 0 = circle white
+      out vec4 fragColor;
+      void main() {
+        vec2 p = gl_PointCoord - 0.5;
+        vec2 off = vec2(0.22 * uAb, 0.0);
+        float ar = smoothstep(0.5, 0.15, length(p - off));
+        float ag = smoothstep(0.5, 0.15, length(p));
+        float ab = smoothstep(0.5, 0.15, length(p + off));
+        float b = 0.3 + 0.8 * clamp(vSpeed, 0.0, 1.8);
+        float am = max(ar, max(ag, ab));
+        fragColor = vec4(vec3(ar, ag, ab) * b, am);
+      }`;
 
-function compile(type, src) {
-  const s = gl.createShader(type);
-  gl.shaderSource(s, src);
-  gl.compileShader(s);
-  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
-  return s;
-}
-const prog = gl.createProgram();
-gl.attachShader(prog, compile(gl.VERTEX_SHADER, vertSrc));
-gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, fragSrc));
-gl.linkProgram(prog);
-gl.useProgram(prog);
-const uRes = gl.getUniformLocation(prog, 'uRes');
-const uSize = gl.getUniformLocation(prog, 'uSize');
+      function compile(type, src) {
+        const s = gl.createShader(type);
+        gl.shaderSource(s, src);
+        gl.compileShader(s);
+        if (!gl.getShaderParameter(s, gl.COMPILE_STATUS))
+          throw new Error(gl.getShaderInfoLog(s));
+        return s;
+      }
+      const prog = gl.createProgram();
+      gl.bindAttribLocation(prog, 0, "aPos");
+      gl.bindAttribLocation(prog, 1, "aSpeed");
+      gl.attachShader(prog, compile(gl.VERTEX_SHADER, vertSrc));
+      gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, fragSrc));
+      gl.linkProgram(prog);
+      gl.useProgram(prog);
+      const uRes = gl.getUniformLocation(prog, "uRes");
+      const uSize = gl.getUniformLocation(prog, "uSize");
+      const uAb = gl.getUniformLocation(prog, "uAb");
 
-gl.enable(gl.BLEND);
-gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+      const lineVertSrc = `#version 300 es
+      in vec2 aPos;
+      in float aAlpha;
+      uniform vec2 uRes;
+      out float vAlpha;
+      void main() {
+        vec2 clip = (aPos / uRes) * 2.0 - 1.0;
+        gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);
+        vAlpha = aAlpha;
+      }`;
+      const lineFragSrc = `#version 300 es
+      precision highp float;
+      in float vAlpha;
+      out vec4 fragColor;
+      void main() { fragColor = vec4(vec3(0.8) * vAlpha, vAlpha); }`;
+      const lineProg = gl.createProgram();
+      gl.bindAttribLocation(lineProg, 0, "aPos");
+      gl.bindAttribLocation(lineProg, 1, "aAlpha");
+      gl.attachShader(lineProg, compile(gl.VERTEX_SHADER, lineVertSrc));
+      gl.attachShader(lineProg, compile(gl.FRAGMENT_SHADER, lineFragSrc));
+      gl.linkProgram(lineProg);
+      const uResL = gl.getUniformLocation(lineProg, "uRes");
 
-// Particle state — flat arrays, canvas-pixel units
-const pos = new Float32Array(N * 2);
-const vel = new Float32Array(N * 2);
-const home = new Float32Array(N * 2);   // rest position on the ring (unit breathe)
-const jitter = new Float32Array(N);     // radial offset from ring line
-const angle = new Float32Array(N);
+      // Fade pass — translucent background quad instead of a hard
+      // clear leaves decaying ghost trails behind fast dots
+      const fadeProg = gl.createProgram();
+      gl.attachShader(
+        fadeProg,
+        compile(
+          gl.VERTEX_SHADER,
+          `#version 300 es
+      void main() {
+        vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
+        gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
+      }`,
+        ),
+      );
+      gl.attachShader(
+        fadeProg,
+        compile(
+          gl.FRAGMENT_SHADER,
+          `#version 300 es
+      precision highp float;
+      uniform float uA;
+      out vec4 fragColor;
+      void main() { fragColor = vec4(0.04, 0.04, 0.05, uA); }`,
+        ),
+      );
+      gl.linkProgram(fadeProg);
+      const uFadeA = gl.getUniformLocation(fadeProg, "uA");
 
-const vbo = gl.createBuffer();
-gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
-gl.bufferData(gl.ARRAY_BUFFER, pos, gl.DYNAMIC_DRAW);
-gl.enableVertexAttribArray(0);
-gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
 
-let W = 0, H = 0, CX = 0, CY = 0, R = 0;
+      // Tunables — CSS px unless noted. `let` so the randomize button
+      // can re-roll them; layout() picks up the new values on rebuild.
+      let SPACING = 26; // grid cell size
+      let RADIUS_CSS = 340; // vortex circle radius around logo
+      let LIFE_STEP_T = 0.16; // conway tick interval, seconds
+      let LIFE_RINGS = 3; // concentric seed bands
+      let SEP_R_CSS = 14; // soft evasion radius
+      let COLL_R_CSS = 7; // hard bounce radius
+      let RESTITUTION = 0.55;
 
-function layout() {
-  W = canvas.clientWidth * DPR;
-  H = canvas.clientHeight * DPR;
-  canvas.width = W;
-  canvas.height = H;
-  gl.viewport(0, 0, W, H);
-  CX = W / 2; CY = H / 2;
-  R = Math.min(W, H) * 0.42;
-  for (let i = 0; i < N; i++) {
-    const a = angle[i], r = R + jitter[i] * DPR;
-    home[i*2]   = CX + Math.cos(a) * r;
-    home[i*2+1] = CY + Math.sin(a) * r;
-  }
-}
+      let W = 0,
+        H = 0,
+        CX = 0,
+        CY = 0,
+        R = 0,
+        SEP_R = 0,
+        SEP_R2 = 0,
+        COLL_R = 0;
 
-// Seed: even angles + gaussian radial jitter = slim fuzzy ring
-for (let i = 0; i < N; i++) {
-  angle[i] = (i / N) * Math.PI * 2 + Math.random() * 0.002;
-  let g = 0;
-  for (let k = 0; k < 4; k++) g += Math.random();
-  jitter[i] = (g / 2 - 1) * 4.0; // ~±4 css px, bell-shaped
-}
-layout();
-for (let i = 0; i < N; i++) {
-  pos[i*2] = home[i*2];
-  pos[i*2+1] = home[i*2+1];
-}
-window.addEventListener('resize', layout);
+      // Particle state — sized per layout (one dot per grid cell)
+      let N = 0;
+      let pos,
+        vel,
+        homeX,
+        homeY,
+        dirn,
+        jit,
+        phase,
+        tspd,
+        ang,
+        accX,
+        accY,
+        speedBuf;
+      let esc = null, // per-dot escape timer — sparks off the ring
+        escAcc = 0;
+      // The wanderer — a single point roaming the grid, its influence
+      // propagating outward through the lattice
 
-// Mouse — canvas-pixel coords
-let mx = -1e6, my = -1e6, mouseOver = false;
-canvas.addEventListener('mousemove', e => { mx = e.clientX * DPR; my = e.clientY * DPR; mouseOver = true; });
-canvas.addEventListener('mouseleave', () => { mouseOver = false; });
-canvas.addEventListener('touchmove', e => {
-  e.preventDefault();
-  mx = e.touches[0].clientX * DPR; my = e.touches[0].clientY * DPR; mouseOver = true;
-}, { passive: false });
-canvas.addEventListener('touchend', () => { mouseOver = false; });
+      // Grid geometry
+      let gcols = 0,
+        grows = 0,
+        lifeAlive = null,
+        lifeNext = null,
+        lifeAcc = 0,
+        lifeHashA = -1,
+        lifeHashB = -1,
+        lifeStale = 0,
+        lifeAliveIdx = null,
+        lifeAliveCount = 0,
+        linkAlive = null,
+        linkNext = null,
+        linkAcc = 0,
+        linkHashA = -1,
+        linkHashB = -1,
+        linkStale = 0,
+        linkAliveIdx = null,
+        linkAliveCount = 0,
+        cellPosX = null,
+        cellPosY = null,
+        dotCell = null,
+        cellDot = null,
+        lifeSeen = null;
 
-// Spatial grid for boid neighbors — rebuilt each frame, linked lists
-const CELL = 10 * DPR;
-let gw = 0, gh = 0, head = null;
-const next = new Int32Array(N);
-function gridResize() {
-  gw = Math.ceil(W / CELL) + 1;
-  gh = Math.ceil(H / CELL) + 1;
-  head = new Int32Array(gw * gh);
-}
-gridResize();
-window.addEventListener('resize', gridResize);
+      // 8 Moore directions ordered by angle 0..315°, snapped to from
+      // each alive cell's bearing off grid center
+      const LIFE_DIRS = [
+        [1, 0],
+        [1, 1],
+        [0, 1],
+        [-1, 1],
+        [-1, 0],
+        [-1, -1],
+        [0, -1],
+        [1, -1],
+      ];
 
-let cvx = new Float32Array(1), cvy = new Float32Array(1), cnt = new Int32Array(1);
-function cellBuffers() {
-  cvx = new Float32Array(gw * gh);
-  cvy = new Float32Array(gw * gh);
-  cnt = new Int32Array(gw * gh);
-}
-cellBuffers();
-window.addEventListener('resize', cellBuffers);
+      // Draw a dot from the LINK board's live cells — a Conway board
+      // entirely separate from the one driving dot movement, so which
+      // points connect is not the same dataset as how dots migrate
+      function pickLifeDot() {
+        return linkAliveCount > 0
+          ? cellDot[linkAliveIdx[(Math.random() * linkAliveCount) | 0]]
+          : (Math.random() * N) | 0;
+      }
 
-const SEP_R = 3.5 * DPR, SEP_R2 = SEP_R * SEP_R;
+      // Re-roll one link slot in place — called both at init (so all
+      // MAX_LINKS lines are live from frame one) and on expiry (so the
+      // count never drops, only the re-fire rate changes)
+      function respawnLink(slot, core) {
+        const lo = 50 * DPR,
+          hi = 240 * DPR;
+        for (let tr = 0; tr < 8; tr++) {
+          const i = pickLifeDot(),
+            j = pickLifeDot();
+          if (i === j) continue;
+          const dx = pos[i * 2] - pos[j * 2],
+            dy = pos[i * 2 + 1] - pos[j * 2 + 1];
+          const d2 = dx * dx + dy * dy;
+          if (d2 > lo * lo && d2 < hi * hi) {
+            linkA[slot] = i;
+            linkB[slot] = j;
+            linkAge[slot] = 0;
+            linkLife[slot] = (1.2 + Math.random() * 1.4) * (1 - core * 0.92);
+            return;
+          }
+        }
+        linkAge[slot] = 0;
+        linkLife[slot] = 0.05; // no valid pair this try — retry next frame
+      }
 
-let last = performance.now();
-function frame(now) {
-  const dt = Math.min((now - last) / 1000, 0.033);
-  last = now;
-  const t = now / 1000;
-
-  // Breathing ring: homes scale gently around center
-  const breathe = 1.0 + 0.015 * Math.sin(t * 1.3) + 0.01 * Math.sin(t * 2.1 + 1.7);
-
-  // Bubbly repulsion sphere: radius pulses like a soap bubble
-  const bubR = (110 + 10 * Math.sin(t * 3.1) + 6 * Math.sin(t * 5.7)) * DPR;
-  const bubR2 = bubR * bubR;
-
-  // Pass 1: bin particles + per-cell velocity sums (alignment source)
-  head.fill(-1); cnt.fill(0); cvx.fill(0); cvy.fill(0);
-  for (let i = 0; i < N; i++) {
-    const cx = (pos[i*2] / CELL) | 0, cy = (pos[i*2+1] / CELL) | 0;
-    if (cx < 0 || cy < 0 || cx >= gw || cy >= gh) continue;
-    const c = cy * gw + cx;
-    next[i] = head[c]; head[c] = i;
-    cvx[c] += vel[i*2]; cvy[c] += vel[i*2+1]; cnt[c]++;
-  }
-
-  const damp = Math.exp(-dt * 5.0);
-  for (let i = 0; i < N; i++) {
-    const px = pos[i*2], py = pos[i*2+1];
-    let fx = 0, fy = 0;
-
-    // Boid: arrival — steer toward home, stronger when farther
-    const hx = CX + (home[i*2] - CX) * breathe;
-    const hy = CY + (home[i*2+1] - CY) * breathe;
-    fx += (hx - px) * 40.0;
-    fy += (hy - py) * 40.0;
-
-    // Boid: separation — push off close neighbors (3×3 cells)
-    const cx = (px / CELL) | 0, cy = (py / CELL) | 0;
-    let alvx = 0, alvy = 0, aln = 0;
-    for (let oy = -1; oy <= 1; oy++) {
-      const yy = cy + oy;
-      if (yy < 0 || yy >= gh) continue;
-      for (let ox = -1; ox <= 1; ox++) {
-        const xx = cx + ox;
-        if (xx < 0 || xx >= gw) continue;
-        const c = yy * gw + xx;
-        alvx += cvx[c]; alvy += cvy[c]; aln += cnt[c];
-        for (let j = head[c]; j !== -1; j = next[j]) {
-          if (j === i) continue;
-          const dx = px - pos[j*2], dy = py - pos[j*2+1];
-          const d2 = dx*dx + dy*dy;
-          if (d2 > 1e-4 && d2 < SEP_R2) {
-            const inv = 1.0 / Math.sqrt(d2);
-            const w = (1.0 - d2 / SEP_R2);
-            fx += dx * inv * w * 80.0;
-            fy += dy * inv * w * 80.0;
+      // Cells don't just flicker — an alive cell's dot steps to
+      // whichever of its 8 neighbors points furthest from grid center
+      // (radial outward walk); near-exact-center cells have no clear
+      // outward direction and stay put — the 9th option
+      function lifeMigrate() {
+        lifeSeen.fill(0);
+        for (let j = 0; j < grows; j++) {
+          for (let i = 0; i < gcols; i++) {
+            const k = j * gcols + i;
+            if (!lifeAlive[k] || lifeSeen[k]) continue;
+            const dx = i - gcols / 2,
+              dy = j - grows / 2;
+            if (Math.hypot(dx, dy) < 1) continue;
+            const dir = Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) & 7;
+            const [odx, ody] = LIFE_DIRS[dir];
+            const ni = (i + odx + gcols) % gcols,
+              nj = (j + ody + grows) % grows;
+            const nk = nj * gcols + ni;
+            if (nk === k || lifeSeen[nk]) continue;
+            const dA = cellDot[k],
+              dB = cellDot[nk];
+            cellDot[k] = dB;
+            cellDot[nk] = dA;
+            dotCell[dA] = nk;
+            dotCell[dB] = k;
+            homeX[dA] = cellPosX[nk];
+            homeY[dA] = cellPosY[nk];
+            homeX[dB] = cellPosX[k];
+            homeY[dB] = cellPosY[k];
+            lifeSeen[k] = 1;
+            lifeSeen[nk] = 1;
           }
         }
       }
-    }
 
-    // Boid: alignment — ease toward neighborhood average velocity
-    if (aln > 1) {
-      fx += ((alvx / aln) - vel[i*2]) * 2.0;
-      fy += ((alvy / aln) - vel[i*2+1]) * 2.0;
-    }
-
-    // Bubble: radial shove away from cursor, soft spherical falloff
-    if (mouseOver) {
-      const dx = px - mx, dy = py - my;
-      const d2 = dx*dx + dy*dy;
-      if (d2 < bubR2) {
-        const d = Math.sqrt(d2) || 1;
-        const w = 1.0 - d / bubR;
-        const shove = w * w * 26000.0;
-        fx += (dx / d) * shove;
-        fy += (dy / d) * shove;
+      function initLinks() {
+        for (let s = 0; s < MAX_LINKS; s++) {
+          respawnLink(s, 0);
+          linkAge[s] = Math.random() * linkLife[s]; // stagger phase
+        }
       }
-    }
 
-    let vx = (vel[i*2] + fx * dt) * damp;
-    let vy = (vel[i*2+1] + fy * dt) * damp;
-    vel[i*2] = vx; vel[i*2+1] = vy;
-    pos[i*2] = px + vx * dt;
-    pos[i*2+1] = py + vy * dt;
-  }
+      // Radial seed: concentric rings of live cells around grid center,
+      // not a random scatter — growth reads as pulses from the middle
+      // instead of an amorphous blob. Shared by both boards — movement
+      // and link-connectivity each seed their own array independently.
+      function seedRadialBoard(board) {
+        board.fill(0);
+        const rMax = Math.min(gcols, grows) / 2;
+        for (let ring = 0; ring < LIFE_RINGS; ring++) {
+          const ringR = ((ring + 1) / (LIFE_RINGS + 1)) * rMax;
+          const band = 0.9 + Math.random() * 0.6;
+          for (let j = 0; j < grows; j++) {
+            for (let i = 0; i < gcols; i++) {
+              const dx = i - gcols / 2,
+                dy = j - grows / 2;
+              const r = Math.hypot(dx, dy);
+              if (Math.abs(r - ringR) < band && Math.random() < 0.55) {
+                board[j * gcols + i] = 1;
+              }
+            }
+          }
+        }
+      }
+      function seedRadialLife() {
+        seedRadialBoard(lifeAlive);
+      }
 
-  gl.clearColor(0.04, 0.04, 0.05, 1.0);
-  gl.clear(gl.COLOR_BUFFER_BIT);
-  gl.uniform2f(uRes, W, H);
-  gl.uniform1f(uSize, 2.4 * DPR);
-  gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
-  gl.bufferSubData(gl.ARRAY_BUFFER, 0, pos);
-  gl.drawArrays(gl.POINTS, 0, N);
+      // Standard B3/S23 Life, toroidal wrap, 8-neighbor Moore — shared
+      // step primitive, writes into `next` and returns nothing (caller
+      // swaps its own board/next references)
+      function conwayStep(board, next) {
+        for (let j = 0; j < grows; j++) {
+          const jN = j === 0 ? grows - 1 : j - 1;
+          const jS = j === grows - 1 ? 0 : j + 1;
+          for (let i = 0; i < gcols; i++) {
+            const iW = i === 0 ? gcols - 1 : i - 1;
+            const iE = i === gcols - 1 ? 0 : i + 1;
+            const n =
+              board[jN * gcols + iW] +
+              board[jN * gcols + i] +
+              board[jN * gcols + iE] +
+              board[j * gcols + iW] +
+              board[j * gcols + iE] +
+              board[jS * gcols + iW] +
+              board[jS * gcols + i] +
+              board[jS * gcols + iE];
+            const k = j * gcols + i;
+            next[k] = n === 3 || (n === 2 && board[k]) ? 1 : 0;
+          }
+        }
+      }
 
-  requestAnimationFrame(frame);
-}
-requestAnimationFrame(frame);
-</script>
-</body>
+      function lifeStep() {
+        conwayStep(lifeAlive, lifeNext);
+        const tmp = lifeAlive;
+        lifeAlive = lifeNext;
+        lifeNext = tmp;
+
+        let pop = 0,
+          hash = 0;
+        lifeAliveCount = 0;
+        for (let k = 0; k < lifeAlive.length; k++) {
+          if (lifeAlive[k]) {
+            lifeAliveIdx[lifeAliveCount++] = k;
+            pop++;
+            hash = (hash * 31 + k) | 0;
+          }
+        }
+        if (pop < lifeAlive.length * 0.04 || hash === lifeHashB) {
+          lifeStale++;
+        } else {
+          lifeStale = 0;
+        }
+        lifeHashB = lifeHashA;
+        lifeHashA = hash;
+        if (lifeStale > 8) {
+          seedRadialLife();
+          lifeStale = 0;
+          lifeHashA = -1;
+          lifeHashB = -1;
+        }
+      }
+
+      // Independent board driving ONLY which points connect — own
+      // radial seed, own population/stagnation tracking, own reseed.
+      // Zero shared state with lifeAlive/lifeMigrate: dot movement and
+      // link connectivity are different datasets by construction.
+      function linkLifeStep() {
+        conwayStep(linkAlive, linkNext);
+        const tmp = linkAlive;
+        linkAlive = linkNext;
+        linkNext = tmp;
+
+        let pop = 0,
+          hash = 0;
+        linkAliveCount = 0;
+        for (let k = 0; k < linkAlive.length; k++) {
+          if (linkAlive[k]) {
+            linkAliveIdx[linkAliveCount++] = k;
+            pop++;
+            hash = (hash * 31 + k) | 0;
+          }
+        }
+        if (pop < linkAlive.length * 0.04 || hash === linkHashB) {
+          linkStale++;
+        } else {
+          linkStale = 0;
+        }
+        linkHashB = linkHashA;
+        linkHashA = hash;
+        if (linkStale > 8) {
+          seedRadialBoard(linkAlive);
+          linkStale = 0;
+          linkHashA = -1;
+          linkHashB = -1;
+        }
+      }
+      ((cellW = 0), (cellH = 0));
+      // Spatial hash
+      let gw = 0,
+        gh = 0,
+        cellPx = 1,
+        head = null,
+        nxt = null;
+
+      const vbo = gl.createBuffer();
+      const speedVbo = gl.createBuffer();
+
+      // Thinking links — random pairs flash a line, then ease out fast
+      let MAX_LINKS = 80; // fixed count, always active — frequency varies, count doesn't
+      let linkA, linkB, linkAge, linkLife, lineData;
+      // Quadratic bezier per link, elbowed at a grid-axis corner —
+      // tessellated into straight segments for gl.LINES
+      const BEZ_SEG = 10;
+      const lineVbo = gl.createBuffer();
+      function allocLinkArrays() {
+        linkA = new Int32Array(MAX_LINKS);
+        linkB = new Int32Array(MAX_LINKS);
+        linkAge = new Float32Array(MAX_LINKS);
+        linkLife = new Float32Array(MAX_LINKS); // always > 0 — no free/dead slot
+        lineData = new Float32Array(MAX_LINKS * BEZ_SEG * 2 * 3); // x,y,alpha per vertex
+      }
+      allocLinkArrays();
+
+      function layout() {
+        W = canvas.clientWidth * DPR;
+        H = canvas.clientHeight * DPR;
+        canvas.width = W;
+        canvas.height = H;
+        gl.viewport(0, 0, W, H);
+        CX = W / 2;
+        CY = H / 2;
+        R =
+          Math.min(
+            RADIUS_CSS,
+            Math.min(canvas.clientWidth, canvas.clientHeight) * 0.42,
+          ) * DPR;
+        SEP_R = SEP_R_CSS * DPR;
+        SEP_R2 = SEP_R * SEP_R;
+        COLL_R = COLL_R_CSS * DPR;
+
+        const cols = Math.max(1, Math.round(canvas.clientWidth / SPACING));
+        const rows = Math.max(1, Math.round(canvas.clientHeight / SPACING));
+        gcols = cols;
+        grows = rows;
+        N = cols * rows;
+        lifeAlive = new Uint8Array(N);
+        lifeNext = new Uint8Array(N);
+        lifeAliveIdx = new Int32Array(N);
+        lifeAliveCount = 0;
+        lifeAcc = 0;
+        lifeStale = 0;
+        lifeHashA = -1;
+        lifeHashB = -1;
+        linkAlive = new Uint8Array(N);
+        linkNext = new Uint8Array(N);
+        linkAliveIdx = new Int32Array(N);
+        linkAliveCount = 0;
+        linkAcc = 0;
+        linkStale = 0;
+        linkHashA = -1;
+        linkHashB = -1;
+        cellPosX = new Float32Array(N);
+        cellPosY = new Float32Array(N);
+        dotCell = new Int32Array(N);
+        cellDot = new Int32Array(N);
+        lifeSeen = new Uint8Array(N);
+        seedRadialLife();
+        seedRadialBoard(linkAlive);
+        pos = new Float32Array(N * 2);
+        vel = new Float32Array(N * 2);
+        homeX = new Float32Array(N);
+        homeY = new Float32Array(N);
+        dirn = new Float32Array(N);
+        jit = new Float32Array(N);
+        phase = new Float32Array(N);
+        tspd = new Float32Array(N);
+        ang = new Float32Array(N);
+        accX = new Float32Array(N);
+        accY = new Float32Array(N);
+        speedBuf = new Float32Array(N);
+        esc = new Float32Array(N);
+        const cw = W / cols,
+          ch = H / rows;
+        cellW = cw;
+        cellH = ch;
+        for (let j = 0; j < rows; j++) {
+          for (let i = 0; i < cols; i++) {
+            const k = j * cols + i;
+            homeX[k] = (i + 0.5) * cw;
+            homeY[k] = (j + 0.5) * ch;
+            cellPosX[k] = homeX[k];
+            cellPosY[k] = homeY[k];
+            dotCell[k] = k;
+            cellDot[k] = k;
+            pos[k * 2] = homeX[k];
+            pos[k * 2 + 1] = homeY[k];
+            // Checkerboard: half spin clockwise, half counterclockwise
+            dirn[k] = (i + j) & 1 ? 1 : -1;
+            let g = 0;
+            for (let q = 0; q < 4; q++) g += Math.random();
+            jit[k] = (g / 2 - 1) * 5 * DPR; // orbit band spread — tight ring
+            phase[k] = Math.random() * Math.PI * 2;
+            tspd[k] = (950 + Math.random() * 120) * DPR; // aligned speeds → coherent streams
+            // Fixed ring slot bearing = spawn bearing from center, so the
+            // grid collapses radially onto the ring and back
+            ang[k] = Math.atan2(homeY[k] - CY, homeX[k] - CX);
+          }
+        }
+
+        // Evenly spaced ring slots, rank-ordered by spawn bearing —
+        // uniform stream density, no angular clumps from the square grid
+        const order = Array.from({ length: N }, (_, k) => k).sort(
+          (a, b) => ang[a] - ang[b],
+        );
+        for (let r = 0; r < N; r++)
+          ang[order[r]] = (r / N) * Math.PI * 2 - Math.PI;
+
+        allocLinkArrays();
+        initLinks();
+
+        cellPx = SEP_R;
+        gw = Math.max(1, Math.ceil(W / cellPx));
+        gh = Math.max(1, Math.ceil(H / cellPx));
+        head = new Int32Array(gw * gh);
+        nxt = new Int32Array(N);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+        gl.bufferData(gl.ARRAY_BUFFER, pos, gl.DYNAMIC_DRAW);
+        gl.enableVertexAttribArray(0);
+        gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+        gl.bindBuffer(gl.ARRAY_BUFFER, speedVbo);
+        gl.bufferData(gl.ARRAY_BUFFER, speedBuf, gl.DYNAMIC_DRAW);
+        gl.enableVertexAttribArray(1);
+        gl.vertexAttribPointer(1, 1, gl.FLOAT, false, 0, 0);
+      }
+      layout();
+      window.addEventListener("resize", layout);
+
+      // Randomize button — re-rolls every tunable and rebuilds the
+      // grid/link pools via layout(), for playing with the parameters
+      function randomizeParams() {
+        const rnd = (lo, hi) => lo + Math.random() * (hi - lo);
+        SPACING = Math.round(rnd(18, 40));
+        RADIUS_CSS = Math.round(rnd(220, 420));
+        LIFE_STEP_T = rnd(0.08, 0.3);
+        LIFE_RINGS = Math.round(rnd(1, 6));
+        SEP_R_CSS = Math.round(rnd(8, 22));
+        COLL_R_CSS = Math.round(rnd(4, Math.min(12, SEP_R_CSS - 1)));
+        RESTITUTION = rnd(0.3, 0.9);
+        MAX_LINKS = Math.round(rnd(20, 160));
+        layout();
+      }
+      canvas.addEventListener("click", (e) => {
+        const cxCss = canvas.clientWidth / 2,
+          cyCss = canvas.clientHeight / 2;
+        const dx = e.clientX - cxCss,
+          dy = e.clientY - cyCss;
+        if (Math.hypot(dx, dy) <= R / DPR) {
+          randomizeParams();
+          // Flash the cursor ring solid white, then let the CSS
+          // transition fade it back to transparent
+          cur.style.background = "rgba(255, 255, 255, 0.95)";
+          requestAnimationFrame(() =>
+            requestAnimationFrame(() => {
+              cur.style.background = "rgba(255, 255, 255, 0)";
+            }),
+          );
+        }
+      });
+
+      // Mouse — canvas-pixel coords
+      const cur = document.querySelector("#cur");
+      const overlay = document.querySelector(".overlay");
+      let mx = -1e6,
+        my = -1e6,
+        mouseOver = false;
+      canvas.addEventListener("mousemove", (e) => {
+        mx = e.clientX * DPR;
+        my = e.clientY * DPR;
+        mouseOver = true;
+        cur.style.transform = `translate(${e.clientX - 14}px, ${e.clientY - 14}px)`;
+        cur.style.opacity = "1";
+      });
+      canvas.addEventListener("mouseleave", () => {
+        mouseOver = false;
+        cur.style.opacity = "0";
+      });
+      canvas.addEventListener(
+        "touchmove",
+        (e) => {
+          e.preventDefault();
+          mx = e.touches[0].clientX * DPR;
+          my = e.touches[0].clientY * DPR;
+          mouseOver = true;
+        },
+        { passive: false },
+      );
+      canvas.addEventListener("touchend", () => {
+        mouseOver = false;
+      });
+
+      let vortexMix = 0,
+        ccMix = 0;
+      let last = performance.now();
+      function frame(now) {
+        const dt = Math.min((now - last) / 1000, 0.033);
+        last = now;
+        const t = now / 1000;
+
+        // Closeness of mouse to screen center drives attraction strength
+        const md = Math.hypot(mx - CX, my - CY);
+        const maxDist = Math.hypot(W * 0.5, H * 0.5);
+        const closeness = mouseOver
+          ? Math.min(1, Math.max(0, 1 - md / maxDist))
+          : 0;
+        const attract = closeness * closeness;
+        // Shape key: grid↔circle is a linear blend scrubbed by cursor
+        // distance — 0 at the ring outline, 1 at RT near the center
+        const RT = R * 0.35;
+        const vmTarget = mouseOver
+          ? Math.min(1, Math.max(0, (R - md) / (R - RT)))
+          : 0;
+        vortexMix += (vmTarget - vortexMix) * (1 - Math.exp(-dt * 14));
+        const vm = vortexMix;
+        // Depth toward exact center: tightens and speeds the streams
+        const ccRaw = mouseOver ? Math.min(1, Math.max(0, 1 - md / RT)) : 0;
+        ccMix += (ccRaw - ccMix) * (1 - Math.exp(-dt * 5));
+        const cs = ccMix;
+
+        // Radial Life: ticks independent of render rate, seeded in
+        // concentric rings so growth/death reads as pulses from center
+        lifeAcc += dt;
+        while (lifeAcc >= LIFE_STEP_T) {
+          lifeAcc -= LIFE_STEP_T;
+          lifeStep();
+          lifeMigrate();
+        }
+
+        // Separate board, separate clock — decides which points
+        // connect, entirely independent of the movement board above
+        linkAcc += dt;
+        while (linkAcc >= LIFE_STEP_T) {
+          linkAcc -= LIFE_STEP_T;
+          linkLifeStep();
+        }
+
+        // Sparks: at full vortex, random dots shoot off the ring on a
+        // ballistic arc, then the arrival step reels them back in
+        escAcc += dt * (vm > 0.7 ? 26 + cs * 44 : 0);
+        while (escAcc >= 1) {
+          escAcc -= 1;
+          const i = (Math.random() * N) | 0;
+          if (esc[i] > 0) continue;
+          const rx = pos[i * 2] - CX,
+            ry = pos[i * 2 + 1] - CY;
+          const rr = Math.hypot(rx, ry) + 1e-3;
+          // Sparks fire INWARD — they populate the disc as a noise field
+          const aOff =
+            Math.atan2(ry, rx) + Math.PI + (Math.random() - 0.5) * 1.2;
+          const kick = (500 + Math.random() * 900) * DPR;
+          vel[i * 2] += Math.cos(aOff) * kick;
+          vel[i * 2 + 1] += Math.sin(aOff) * kick;
+          esc[i] = 0.45 + Math.random() * 0.65;
+        }
+
+        // Thinking links: fixed count, always on screen — the deeper
+        // into the vortex core, the shorter each link's life, so the
+        // same 80 lines re-fire faster instead of the count growing
+        const core = vm * 0.4 + cs * 0.6;
+
+        const glowVal = Math.round(closeness * 60 + vm * 60);
+        overlay.style.textShadow = `0 0 ${glowVal}px rgba(255,255,255,${0.12 + closeness * 0.2 + vm * 0.25})`;
+
+        // Spatial hash rebuild
+        head.fill(-1);
+        for (let i = 0; i < N; i++) {
+          let cx = (pos[i * 2] / cellPx) | 0;
+          let cy = (pos[i * 2 + 1] / cellPx) | 0;
+          if (cx < 0) cx = 0;
+          else if (cx >= gw) cx = gw - 1;
+          if (cy < 0) cy = 0;
+          else if (cy >= gh) cy = gh - 1;
+          const c = cy * gw + cx;
+          nxt[i] = head[c];
+          head[c] = i;
+        }
+
+        // Pair pass: soft separation (evade) + elastic bounce (collide).
+        // Turbulence belongs to the vortex and the mouse cluster — the
+        // idle grid is pure kinematic glides, so skip it entirely there
+        accX.fill(0);
+        accY.fill(0);
+        const pairOn = vm > 0.02 || attract > 0.02;
+        // Pair forces are what fatten the ring — collapse them with
+        // center depth so the line can reach true single-pixel width
+        const sepK = (80 + vm * 340) * (1 - cs * 0.92) * DPR;
+        const alignK = vm * 13; // boid alignment — clashing neighbors match velocity fast
+        for (let cy = 0; pairOn && cy < gh; cy++) {
+          for (let cx = 0; cx < gw; cx++) {
+            for (let i = head[cy * gw + cx]; i >= 0; i = nxt[i]) {
+              const px = pos[i * 2],
+                py = pos[i * 2 + 1];
+              // half-neighborhood: rest of own cell + E, SW, S, SE cells
+              for (let n = 0; n < 5; n++) {
+                let j;
+                if (n === 0) j = nxt[i];
+                else {
+                  const ncx =
+                    cx + (n === 1 ? 1 : n === 2 ? -1 : n === 4 ? 1 : 0);
+                  const ncy = cy + (n === 1 ? 0 : 1);
+                  if (ncx < 0 || ncx >= gw || ncy >= gh) continue;
+                  j = head[ncy * gw + ncx];
+                }
+                for (; j >= 0; j = nxt[j]) {
+                  const dx = px - pos[j * 2],
+                    dy = py - pos[j * 2 + 1];
+                  const d2 = dx * dx + dy * dy;
+                  if (d2 >= SEP_R2 || d2 < 1e-6) continue;
+                  const d = Math.sqrt(d2);
+                  const nx = dx / d,
+                    ny = dy / d;
+                  const f = (1 - d / SEP_R) * sepK;
+                  accX[i] += nx * f;
+                  accY[i] += ny * f;
+                  accX[j] -= nx * f;
+                  accY[j] -= ny * f;
+                  if (alignK > 0.01) {
+                    const ax = (vel[j * 2] - vel[i * 2]) * alignK;
+                    const ay = (vel[j * 2 + 1] - vel[i * 2 + 1]) * alignK;
+                    accX[i] += ax;
+                    accY[i] += ay;
+                    accX[j] -= ax;
+                    accY[j] -= ay;
+                  }
+                  if (d < COLL_R) {
+                    // Elastic impulse if approaching — equal masses
+                    const rel =
+                      (vel[i * 2] - vel[j * 2]) * nx +
+                      (vel[i * 2 + 1] - vel[j * 2 + 1]) * ny;
+                    if (rel < 0) {
+                      const imp =
+                        (-(1 + RESTITUTION * (1 - vm * 0.6)) * rel) / 2;
+                      vel[i * 2] += imp * nx;
+                      vel[i * 2 + 1] += imp * ny;
+                      vel[j * 2] -= imp * nx;
+                      vel[j * 2 + 1] -= imp * ny;
+                    }
+                    // De-overlap
+                    const push =
+                      (COLL_R - d) * (0.25 - vm * 0.18) * (1 - cs * 0.95);
+                    pos[i * 2] += nx * push;
+                    pos[i * 2 + 1] += ny * push;
+                    pos[j * 2] -= nx * push;
+                    pos[j * 2 + 1] -= ny * push;
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // Integrate — shape key: each dot converges on
+        // lerp(gridHome, ringSlot, vm) by an exponential step: same
+        // fraction of remaining distance every frame, so near and far
+        // dots arrive on the same clock — distance sets speed, not time
+        const arrRate =
+          16 * (1 - attract * 0.9) * (1 - vm) + (26 + cs * 18) * vm;
+        const pull = attract * (1 - vm);
+        const spinS = 1 + cs * 0.8;
+        const dampRate = 1.5 + (1 - vm) * 12 * (1 - attract * 0.5);
+        const damp = Math.exp(-dt * dampRate);
+        const vmax = (300 + attract * 700 + vm * (1900 + cs * 900)) * DPR;
+        const spdNorm = 1 / ((200 + vm * 700) * DPR);
+        for (let i = 0; i < N; i++) {
+          const px = pos[i * 2],
+            py = pos[i * 2 + 1];
+          let fx = accX[i],
+            fy = accY[i];
+
+          // Ring slot: fixed bearing per dot, spinning at stream speed
+          // scaled by vm — half morphed means half swirl speed
+          // Two interleaving rotations: each stream rides a slow
+          // counter-rotating radial wave — they drift toward and away
+          // from each other, braiding smoothly instead of clumping
+          const wv = Math.sin(
+            ang[i] * 3.0 + t * dirn[i] * 1.7 + phase[i] * 0.2,
+          );
+          // Streamline toward the end state: the braid noise collapses
+          // as the vortex completes — fully engaged and centered, the
+          // streams merge into one thin clean circle
+          const tight = 1 - vm * (0.7 + cs * 0.29);
+          const tr = R + ((dirn[i] * 3 + wv * 16) * DPR + jit[i] * 0.3) * tight;
+          const wAng = (dirn[i] * tspd[i] * spinS * vm) / tr;
+          ang[i] += wAng * dt;
+          const ca = Math.cos(ang[i]),
+            sa = Math.sin(ang[i]);
+
+          // Shape-key target — linear lerp grid↔ring
+          let tgx = homeX[i] + (CX + ca * tr - homeX[i]) * vm;
+          let tgy = homeY[i] + (CY + sa * tr - homeY[i]) * vm;
+
+          // Track the moving slot: match its tangential velocity so the
+          // stream carries no lag at full vortex
+          if (vm > 0.001 && esc[i] <= 0) {
+            const sv = tspd[i] * spinS * dirn[i] * vm;
+            fx += (-sa * sv - vel[i * 2]) * 18 * vm;
+            fy += (ca * sv - vel[i * 2 + 1]) * 18 * vm;
+            // Centripetal feedforward: circular tracking otherwise lags
+            // outward by a_c/rate² (≈15px) — supply v²/r exactly so the
+            // dot holds the target radius instead of bulging past it
+            const cf = wAng * wAng * tr;
+            fx -= ca * cf;
+            fy -= sa * cf;
+          } else if (vm > 0.001 && esc[i] > 0) {
+            // Interior noise field: escaped dots swirl circularly around
+            // the center (half CW, half CCW), contained inside the ring
+            const rxE = px - CX,
+              ryE = py - CY;
+            const rE = Math.hypot(rxE, ryE) + 1e-3;
+            const swirl = 1100 * DPR * vm;
+            fx += (-ryE / rE) * dirn[i] * swirl;
+            fy += (rxE / rE) * dirn[i] * swirl;
+            if (rE > R * 0.92) {
+              fx -= (rxE / rE) * 2600 * DPR * vm;
+              fy -= (ryE / rE) * 2600 * DPR * vm;
+            }
+          }
+
+          // Mouse gravity — stronger the closer the mouse is to center
+          if (pull > 0.001) {
+            const dx = mx - px,
+              dy = my - py;
+            const d = Math.hypot(dx, dy) + 1e-3;
+            const a = pull * 3200 * DPR * (d / (d + 300 * DPR));
+            fx += (dx / d) * a;
+            fy += (dy / d) * a;
+          }
+
+          // Idle: inverted field — same circle, but it pushes the grid
+          // apart along its outline, carving the ring as a negative image
+          const idleW = 1 - vm;
+          if (idleW > 0.001) {
+            const rx = px - CX,
+              ry = py - CY;
+            const r = Math.hypot(rx, ry) + 1e-3;
+            const dr = r - R;
+            const ad = Math.abs(dr);
+            const band = 70 * DPR;
+            if (ad < band) {
+              const f =
+                (1 - ad / band) * 2600 * DPR * idleW * (dr < 0 ? -1 : 1);
+              fx += (rx / r) * f;
+              fy += (ry / r) * f;
+            }
+          }
+
+          let vx = (vel[i * 2] + fx * dt) * damp;
+          let vy = (vel[i * 2 + 1] + fy * dt) * damp;
+          const sp = Math.hypot(vx, vy);
+          if (sp > vmax) {
+            vx *= vmax / sp;
+            vy *= vmax / sp;
+          }
+          vel[i * 2] = vx;
+          vel[i * 2 + 1] = vy;
+          // Turbulence rides on velocity; arrival is the exponential
+          // step toward the target — never overshoots, uniform timing
+          let nxp = px + vx * dt,
+            nyp = py + vy * dt;
+          let ka = 1 - Math.exp(-dt * arrRate);
+          if (esc[i] > 0) {
+            esc[i] -= dt;
+            ka *= 0.1; // escaping: nearly free flight, then reeled back
+          }
+          nxp += (tgx - nxp) * ka;
+          nyp += (tgy - nyp) * ka;
+          // Radial-only projection: at full depth, pin the dot to its
+          // target radius (tangential motion untouched — turbulence
+          // stays alive along the line, the line itself goes razor)
+          if (vm > 0.5 && esc[i] <= 0) {
+            const rrx = nxp - CX,
+              rry = nyp - CY;
+            const rl = Math.hypot(rrx, rry) + 1e-3;
+            const corr = ((tr - rl) * cs * 0.85 * (vm - 0.5)) / 0.5;
+            nxp += (rrx / rl) * corr;
+            nyp += (rry / rl) * corr;
+          }
+          speedBuf[i] =
+            (Math.hypot(nxp - px, nyp - py) / dt) *
+            spdNorm *
+            (1 - idleW * (lifeAlive[i] ? 0 : 0.85));
+          pos[i * 2] = nxp;
+          pos[i * 2 + 1] = nyp;
+        }
+
+        // Age links, build bezier vertices — smooth symmetric bell
+        // envelope: eases in as gently as it eases out, no flash
+        let lineVerts = 0;
+        for (let s = 0; s < MAX_LINKS; s++) {
+          linkAge[s] += dt;
+          const p = linkAge[s] / linkLife[s];
+          if (p >= 1) {
+            respawnLink(s, core);
+            continue;
+          }
+          const bell = p * (1 - p) * 4; // 0→1→0, symmetric
+          // Half the pool (odd slots) fades out as the vortex engages —
+          // exactly half the lines remain once fully in circle mode
+          const a = bell * bell * 0.4 * (s & 1 ? 1 - vm : 1);
+          if (a <= 0.0015) continue;
+          const ia = linkA[s],
+            ib = linkB[s];
+          const x0 = pos[ia * 2],
+            y0 = pos[ia * 2 + 1];
+          const x2 = pos[ib * 2],
+            y2 = pos[ib * 2 + 1];
+          // Elbow control point sits on the grid axis of one endpoint
+          // (its x or y), so both legs run horizontal/vertical near
+          // the dots — alternated by link slot so traces don't all
+          // bend the same way
+          let cx = s & 1 ? x0 : x2;
+          let cy = s & 1 ? y2 : y0;
+
+          // If the straight run would cut through the circle, bow the
+          // control point outward instead — closest approach of the
+          // segment to center, pushed clear to R plus a margin
+          const sdx = x2 - x0,
+            sdy = y2 - y0;
+          const segLenSq = sdx * sdx + sdy * sdy || 1;
+          const ct = Math.min(
+            1,
+            Math.max(0, ((CX - x0) * sdx + (CY - y0) * sdy) / segLenSq),
+          );
+          const clX = x0 + ct * sdx,
+            clY = y0 + ct * sdy;
+          const clR = Math.hypot(clX - CX, clY - CY);
+          const clearR = R + 40 * DPR;
+          if (clR < clearR) {
+            const bAng = Math.atan2(clY - CY, clX - CX);
+            cx = CX + Math.cos(bAng) * clearR;
+            cy = CY + Math.sin(bAng) * clearR;
+          }
+          let px = x0,
+            py = y0;
+          // Every other tessellation segment fades out as the vortex
+          // engages — solid curve at idle, dotted/dashed on the closed
+          // circle, continuous in between
+          for (let t = 1; t <= BEZ_SEG; t++) {
+            const u = t / BEZ_SEG,
+              mu = 1 - u;
+            const bx = mu * mu * x0 + 2 * mu * u * cx + u * u * x2;
+            const by = mu * mu * y0 + 2 * mu * u * cy + u * u * y2;
+            const segA = t & 1 ? a * (1 - vm) : a;
+            const o = lineVerts * 3;
+            lineData[o] = px;
+            lineData[o + 1] = py;
+            lineData[o + 2] = segA;
+            lineData[o + 3] = bx;
+            lineData[o + 4] = by;
+            lineData[o + 5] = segA;
+            lineVerts += 2;
+            px = bx;
+            py = by;
+          }
+        }
+
+        if (vm > 0.02) {
+          // Ghost trails: fade the last frame instead of clearing it
+          gl.useProgram(fadeProg);
+          gl.uniform1f(uFadeA, 1 - 0.82 * vm);
+          gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+          gl.disableVertexAttribArray(0);
+          gl.disableVertexAttribArray(1);
+          gl.drawArrays(gl.TRIANGLES, 0, 3);
+          gl.enableVertexAttribArray(0);
+          gl.enableVertexAttribArray(1);
+          gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+        } else {
+          gl.clearColor(0.04, 0.04, 0.05, 1.0);
+          gl.clear(gl.COLOR_BUFFER_BIT);
+        }
+
+        if (lineVerts > 0) {
+          gl.useProgram(lineProg);
+          gl.uniform2f(uResL, W, H);
+          gl.bindBuffer(gl.ARRAY_BUFFER, lineVbo);
+          gl.bufferData(
+            gl.ARRAY_BUFFER,
+            lineData.subarray(0, lineVerts * 3),
+            gl.DYNAMIC_DRAW,
+          );
+          gl.enableVertexAttribArray(0);
+          gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 12, 0);
+          gl.enableVertexAttribArray(1);
+          gl.vertexAttribPointer(1, 1, gl.FLOAT, false, 12, 8);
+          gl.drawArrays(gl.LINES, 0, lineVerts);
+        }
+
+        gl.useProgram(prog);
+        gl.uniform2f(uRes, W, H);
+        gl.uniform1f(uSize, (3.2 - vm * 1.0) * DPR);
+        gl.uniform1f(uAb, 1 - vm);
+        gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+        gl.bufferSubData(gl.ARRAY_BUFFER, 0, pos);
+        gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+        gl.bindBuffer(gl.ARRAY_BUFFER, speedVbo);
+        gl.bufferSubData(gl.ARRAY_BUFFER, 0, speedBuf);
+        gl.vertexAttribPointer(1, 1, gl.FLOAT, false, 0, 0);
+        gl.drawArrays(gl.POINTS, 0, N);
+
+        requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+    </script>
+  </body>
 </html>
