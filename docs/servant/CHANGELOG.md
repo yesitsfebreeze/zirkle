@@ -1,5 +1,9 @@
 # CHANGELOG
 
+Decided by: user, 2026-07-31 — page is fully monochrome; click inverts everything (supersedes the global accent hue introduced earlier today)
+
+- 2026-07-31: removed the last colour — hueFn/hue2rgb, globalHue, rollGlobalHue, linkHue and the aHue/vHue orb varying all deleted; orbs render white (`vec3(glow * vAlpha * 1.6)`) and orbData stride drops 4→3 floats (vertexAttribPointer stride 16→12, attribute 2 no longer bound or enabled anywhere). soon™ sup gets a static rgba(255,255,255,0.55) and loses its colour transition. Click handler keeps randomizeParams + the body.invert toggle
+
 Decided by: user, 2026-07-31 — dead band at the centre pins the field at its maximum instead of letting a near-centre cursor drive it past breaking, and the cursor ring shrinks on the same ramp
 
 - 2026-07-31: hoisted RT (R·0.35) and new DEAD_R (R·0.06) onto layout so the frame loop and the cursor handler share them; `md` floor changed from 0.001 to DEAD_R, and ccRaw remapped from `1 - md/RT` to `(RT - md)/(RT - DEAD_R)` so cs reaches exactly 1 at the band edge rather than asymptotically chasing it at md=0. Inside the band vm/cs/csGate are all frozen — verified identical at d=20.4/10/2/0. Cursor ring scales 1.0→0.25 on the same RT→DEAD_R ramp, held at 0.25 inside the band
