@@ -643,8 +643,11 @@
             cellDot[k] = k;
             pos[k * 2] = homeX[k];
             pos[k * 2 + 1] = homeY[k];
-            // Checkerboard: half spin clockwise, half counterclockwise
-            dirn[k] = (i + j) & 1 ? 1 : -1;
+            // Two coherent counter-rotating halves, split top/bottom.
+            // A checkerboard also gives a 50/50 split but puts opposing
+            // dots side by side, which shears the flock apart — boid
+            // alignment can only read as unison within a contiguous group
+            dirn[k] = homeY[k] < CY ? 1 : -1;
             let g = 0;
             for (let q = 0; q < 4; q++) g += Math.random();
             jit[k] = (g / 2 - 1) * 5 * DPR; // orbit band spread — tight ring
@@ -809,8 +812,10 @@
         }
 
         // Sparks: at full vortex, random dots shoot off the ring on a
-        // ballistic arc, then the arrival step reels them back in
-        escAcc += dt * (vm > 0.7 ? 26 + cs * 44 : 0);
+        // ballistic arc, then the arrival step reels them back in.
+        // Rate now DECAYS toward the centre — it used to climb with cs,
+        // which is exactly what produced stragglers at full depth
+        escAcc += dt * (vm > 0.7 ? 26 * (1 - cs) : 0);
         while (escAcc >= 1) {
           escAcc -= 1;
           const i = (Math.random() * N) | 0;
@@ -857,8 +862,12 @@
         const pairOn = vm > 0.02 || attract > 0.02;
         // Pair forces are what fatten the ring — collapse them with
         // center depth so the line can reach true single-pixel width
-        const sepK = (80 + vm * 340) * (1 - cs * 0.92) * DPR;
-        const alignK = vm * 13; // boid alignment — clashing neighbors match velocity fast
+        // Separation survives at depth: it used to fall to 8% at the
+        // centre, which is why dots stopped avoiding each other there
+        const sepK = (80 + vm * 340) * (1 - cs * 0.45) * DPR;
+        // Boid alignment climbs toward the centre so each half locks
+        // into one motion instead of drifting independently
+        const alignK = vm * (13 + cs * 22);
         for (let cy = 0; pairOn && cy < gh; cy++) {
           for (let cx = 0; cx < gw; cx++) {
             for (let i = head[cy * gw + cx]; i >= 0; i = nxt[i]) {
@@ -1057,7 +1066,8 @@
             nyp = py + vy * dt;
           let ka = 1 - Math.exp(-dt * arrRate);
           if (esc[i] > 0) {
-            esc[i] -= dt;
+            // Deeper in, sparks are reeled back sooner
+            esc[i] -= dt * (1 + cs * 6);
             ka *= 0.1; // escaping: nearly free flight, then reeled back
           }
           nxp += (tgx - nxp) * ka;
@@ -1073,7 +1083,14 @@
             // anything above 1 throws the dot past the target radius and
             // further out every frame. At 1 it is an exact lerp onto tr
             // and the pin cannot diverge no matter how deep the cursor
-            const g = Math.min(1, (csGate * 8.5 * (vm - 0.5)) / 0.5);
+            // Outliers are pulled on their radius error, not just on
+            // depth: a dot far off the line gets the strong correction
+            // immediately instead of waiting for csGate to ramp
+            const err = Math.min(1, Math.abs(tr - rl) / (R * 0.25));
+            const g = Math.min(
+              1,
+              ((csGate * 8.5 + err * 3.0) * (vm - 0.5)) / 0.5,
+            );
             const corr = (tr - rl) * g;
             nxp += (rrx / rl) * corr;
             nyp += (rry / rl) * corr;
