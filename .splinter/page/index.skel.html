@@ -1,0 +1,237 @@
+<!-- §source page/index.html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>zirkle</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0a0a; }
+  canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; }
+  .overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    pointer-events: none; z-index: 10;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  h1 {
+    font-size: clamp(3rem, 10vw, 8rem);
+    font-weight: 300; letter-spacing: 0.06em;
+    color: rgba(255,255,255,0.92);
+    text-shadow: 0 0 80px rgba(255,255,255,0.15);
+    margin-bottom: 0.25em;
+  }
+  p {
+    font-size: clamp(0.85rem, 2vw, 1.4rem);
+    font-weight: 300; letter-spacing: 0.08em;
+    color: rgba(255,255,255,0.45);
+  }
+</style>
+</head>
+<body>
+
+<!-- §.splinter/page/index/c.fs
+
+<div class="overlay">
+  <h1>zirkle</h1>
+  <p>we come full zirkle&nbsp;&nbsp;soon™</p>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const gl = canvas.getContext('webgl2', { antialias: true });
+if (!gl) {
+  document.querySelector('.overlay').innerHTML = '<p style="color:#fff">WebGL 2 needed</p>';
+}
+
+let mouseX = 0.5, mouseY = 0.5;
+let targetMX = 0.5, targetMY = 0.5;
+let mouseOver = false;
+
+canvas.addEventListener('mousemove', e => {
+  targetMX = e.clientX / canvas.width;
+  targetMY = 1.0 - e.clientY / canvas.height;
+});
+canvas.addEventListener('mouseenter', () => { mouseOver = true; });
+canvas.addEventListener('mouseleave', () => { mouseOver = false; });
+
+// Touch
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  targetMX = e.touches[0].clientX / canvas.width;
+  targetMY = 1.0 - e.touches[0].clientY / canvas.height;
+  mouseOver = true;
+}, { passive: false });
+canvas.addEventListener('touchend', () => { mouseOver = false; });
+
+const vertSrc = `#version 300 es
+in vec2 aPos;
+void main() { gl_Position = vec4(aPos, 0.0, 1.0); }
+`;
+
+const fragSrc = `#version 300 es
+precision highp float;
+out vec4 fragColor;
+
+uniform vec2 uRes;
+uniform vec2 uMouse;     // normalized [0,1]
+uniform float uTime;
+uniform float uMouseOver; // 0.0 or 1.0
+
+// Smooth noise
+float hash(vec2 p) {
+  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+
+float noise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(
+    mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x),
+    mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x),
+    f.y
+  );
+}
+
+float fbm(vec2 p) {
+  float v = 0.0, a = 0.5;
+  vec2 shift = vec2(100.0);
+  for (int i = 0; i < 5; i++) {
+    v += a * noise(p);
+    p = p * 2.0 + shift;
+    a *= 0.5;
+  }
+  return v;
+}
+
+void main() {
+  vec2 uv = gl_FragCoord.xy / uRes;
+  vec2 center = vec2(0.5, 0.5);
+
+  // Circle radius — ~85% of shortest dimension
+  float radius = 0.42;
+
+  // Distance from center
+  float dist = length(uv - center);
+
+  // Mouse influence — smooth falloff
+  float mouseDist = length(uv - uMouse);
+  float mouseInfluence = uMouseOver * exp(-mouseDist * 4.5);
+
+  // Idle breathing
+  float breathe = 1.0 + 0.015 * sin(uTime * 1.3) + 0.01 * sin(uTime * 2.1 + 1.7);
+
+  // Distortion: displace uv based on mouse proximity + noise
+  float noiseVal = fbm(uv * 6.0 + uTime * 0.15) * 0.5 + 0.5;
+  float displaceStrength = mouseInfluence * 0.06 + 0.003 * (1.0 + sin(uTime * 0.7) * 0.5);
+
+  vec2 distortedUV = uv;
+  distortedUV += vec2(
+    (noiseVal - 0.5) * displaceStrength,
+    (fbm(uv * 7.0 + uTime * 0.2 + 2.3) * 0.5 - 0.25) * displaceStrength
+  );
+
+  float distortedDist = length(distortedUV - center);
+
+  // Edge: soft circle with breathing radius
+  float edge = smoothstep(radius * breathe + 0.03, radius * breathe - 0.03, distortedDist);
+
+  // Outer glow
+  float glow = exp(-distortedDist * 6.0) * 0.15;
+
+  // Inner subtle gradient
+  float innerGrad = 1.0 - smoothstep(0.0, radius * breathe * 0.7, distortedDist);
+  innerGrad = innerGrad * 0.08;
+
+  // Blur halo around circle edge when mouse near
+  float blurHalo = uMouseOver * exp(-abs(distortedDist - radius * breathe) * 25.0) * 0.25;
+
+  // Base circle color — warm off-white
+  vec3 circleColor = vec3(0.96, 0.94, 0.90);
+
+  // Dark background with subtle noise texture
+  vec3 bgColor = vec3(0.04, 0.04, 0.05) + noise(uv * 300.0 + uTime * 0.1) * 0.015;
+
+  // Assemble: circle edge determines mix
+  float circleMask = edge + glow + innerGrad + blurHalo;
+  vec3 color = mix(bgColor, circleColor, clamp(circleMask, 0.0, 1.0));
+
+  // Subtle vignette
+  float vignette = 1.0 - length(uv - 0.5) * 0.6;
+  color *= vignette;
+
+  fragColor = vec4(color, 1.0);
+}
+`;
+
+function compileShader(type, src) {
+  const shader = gl.createShader(type);
+  gl.shaderSource(shader, src);
+  gl.compileShader(shader);
+  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+    console.error(gl.getShaderInfoLog(shader));
+    gl.deleteShader(shader);
+    return null;
+  }
+  return shader;
+}
+
+const vShader = compileShader(gl.VERTEX_SHADER, vertSrc);
+const fShader = compileShader(gl.FRAGMENT_SHADER, fragSrc);
+const program = gl.createProgram();
+gl.attachShader(program, vShader);
+gl.attachShader(program, fShader);
+gl.linkProgram(program);
+if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+  console.error(gl.getProgramInfoLog(program));
+}
+
+const uRes = gl.getUniformLocation(program, 'uRes');
+const uMouse = gl.getUniformLocation(program, 'uMouse');
+const uTime = gl.getUniformLocation(program, 'uTime');
+const uMouseOver = gl.getUniformLocation(program, 'uMouseOver');
+
+// Fullscreen quad
+const buf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+  -1, -1,  1, -1,  -1, 1,
+  -1,  1,  1, -1,   1, 1,
+]), gl.STATIC_DRAW);
+
+const aPos = gl.getAttribLocation(program, 'aPos');
+gl.enableVertexAttribArray(aPos);
+gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+function resize() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = canvas.clientWidth * dpr;
+  canvas.height = canvas.clientHeight * dpr;
+  gl.viewport(0, 0, canvas.width, canvas.height);
+}
+window.addEventListener('resize', resize);
+resize();
+
+const startTime = performance.now();
+
+function render(now) {
+  // Smooth mouse follow
+  const smooth = 0.08;
+  mouseX += (targetMX - mouseX) * smooth;
+  mouseY += (targetMY - mouseY) * smooth;
+
+  gl.useProgram(program);
+  gl.uniform2f(uRes, canvas.width, canvas.height);
+  gl.uniform2f(uMouse, mouseX, mouseY);
+  gl.uniform1f(uTime, (now - startTime) * 0.001);
+  gl.uniform1f(uMouseOver, mouseOver ? 1.0 : 0.0);
+  gl.drawArrays(gl.TRIANGLES, 0, 6);
+  requestAnimationFrame(render);
+}
+
+requestAnimationFrame(render);
+</script>
+</body>
+</html>
