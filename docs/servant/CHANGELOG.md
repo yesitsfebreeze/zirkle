@@ -1,5 +1,11 @@
 # CHANGELOG
 
+Decided by: user, 2026-07-31 — blur means depth of field: a true gaussian circle of confusion with sensor grain, not a widened smoothstep edge
+
+- 2026-07-31: added a shared `bokehFn` GLSL snippet (hash12 + bokeh) interpolated into both the grid-dot and orb fragment shaders. `bokeh()` is a real gaussian `exp(-d²/2σ²)`, shifted by its value at the sprite edge and rescaled so it reaches exactly 0 at d=0.5 while peaking at 1 — no normalise-by-centre hack needed, a gaussian peaks at 1 by construction. Grain is multiplied in via a hash12 dither seeded on `gl_FragCoord.xy + uT`, so out-of-focus dots break into animated sensor noise; new uT uniform on both programs, fed `(t*60) % 1024`.
+- 2026-07-31: grid dots — sprite mix 2.6→4.6 (14.7px at rest vs 3.2px at speed), σ mix(0.30, 0.085), grain mix(0.55, 0). Measured profile: a resting dot holds alpha 0.46 at 25% radius and 0.26 at 35%, against 0.01/0.00 for a moving one — a genuinely broad spread rather than a soft edge. Peak alpha still respects the 0.75 floor.
+- 2026-07-31: orb arrival bloom — sprite growth 2.4→3.6 (32.2px at t=1), σ mix(0.16, 0.34), grain up to 0.5. Fill cost at rest measured at 1.09M fragments for 6400 dots, ~0.5% of a 1080p frame.
+
 Decided by: user, 2026-07-31 — link orbs always finish the curve they started, and blur-flash on arrival
 
 - 2026-07-31: removed the mid-flight vanish — `a = s & 1 ? 1 - vm : 1` with `if (a <= 0.0015) continue` made odd-slot orbs fade to nothing partway along their bezier as the vortex engaged, so half the pool disappeared instead of animating to the end. Pool thinning now happens at respawn instead: odd slots get `linkAge -= vm * LINK_DELAY_MAX * 2` (up to 8s extra wait at full vortex), lowering the duty cycle while every orb still completes its curve.

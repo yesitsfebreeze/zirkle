@@ -123,24 +123,48 @@
         // bigger sprite so the soft falloff is actually visible, fast
         // dots shrink back to a tight point
         float sharp = clamp(aSpeed, 0.0, 1.0);
-        gl_PointSize = uSize * mix(2.6, 1.0, sharp);
+        gl_PointSize = uSize * mix(4.6, 1.0, sharp);
         vSpeed = aSpeed;
+      }`;
+
+      // Shared bokeh core: a true gaussian, shifted so it reaches zero
+      // exactly at the sprite edge and rescaled so the peak stays 1 —
+      // spreading the disc never dims its centre. Grain is multiplied
+      // in, heaviest where the blur is widest, so an out-of-focus dot
+      // breaks up into sensor noise instead of reading as a clean blob.
+      const bokehFn = `
+      float hash12(vec2 p) {
+        vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+        p3 += dot(p3, p3.yzx + 33.33);
+        return fract((p3.x + p3.y) * p3.z);
+      }
+      float bokeh(float d, float sigma, float grain, vec2 seed) {
+        float s2 = 2.0 * sigma * sigma;
+        float g = exp(-d * d / s2);
+        float edge = exp(-0.25 / s2);
+        g = max(0.0, (g - edge) / (1.0 - edge));
+        float n = hash12(seed);
+        return g * (1.0 - grain + grain * n);
       }`;
 
       const fragSrc = `#version 300 es
       precision highp float;
       in float vSpeed;
+      uniform float uT;
       out vec4 fragColor;
+      ${bokehFn}
       void main() {
         float sharp = clamp(vSpeed, 0.0, 1.0);
-        // Defocus at rest: the falloff starts at the sprite centre so a
-        // still dot is a soft blob, and tightens to a hard edge as the
-        // dot picks up speed
-        // Normalised by its own centre value so spreading the falloff
-        // softens the edge without eating into the 75% opacity floor
-        float e1 = mix(-0.15, 0.42, sharp);
-        float a = smoothstep(0.5, e1, length(gl_PointCoord - 0.5))
-                / smoothstep(0.5, e1, 0.0);
+        // Depth of field: a still dot is a wide, grainy circle of
+        // confusion; speed pulls it back to a tight clean point
+        float sigma = mix(0.30, 0.085, sharp);
+        float grain = mix(0.55, 0.0, sharp);
+        float a = bokeh(
+          length(gl_PointCoord - 0.5),
+          sigma,
+          grain,
+          gl_FragCoord.xy + uT
+        );
         // Monochrome, and every dot visible: 75% floor on both
         // brightness and opacity, velocity carries them to full
         float lift = 0.75 + 0.25 * sharp;
@@ -164,6 +188,7 @@
       gl.useProgram(prog);
       const uRes = gl.getUniformLocation(prog, "uRes");
       const uSize = gl.getUniformLocation(prog, "uSize");
+      const uT = gl.getUniformLocation(prog, "uT");
 
       // Orbs — the only thing a link ever draws: one solid point per
       // link, riding its bezier at the link's own age/life progress
@@ -178,19 +203,24 @@
         gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);
         // Swells as it lands — the sprite needs the extra pixels for
         // the softened edge to register as a flash rather than a fade
-        gl_PointSize = uSize * (1.0 + aBlur * 2.4);
+        gl_PointSize = uSize * (1.0 + aBlur * 3.6);
         vBlur = aBlur;
       }`;
       const orbFragSrc = `#version 300 es
       precision highp float;
       in float vBlur;
+      uniform float uT;
       out vec4 fragColor;
+      ${bokehFn}
       void main() {
-        float d = length(gl_PointCoord - 0.5);
-        // Falloff spreads from the centre on arrival; normalised so the
-        // bloom softens and widens without dimming the core
-        float e1 = mix(0.0, -0.45, vBlur);
-        float glow = smoothstep(0.5, e1, d) / smoothstep(0.5, e1, 0.0);
+        // Same circle of confusion as the grid dots: on arrival the orb
+        // defocuses into a wide grainy bloom instead of a hard point
+        float glow = bokeh(
+          length(gl_PointCoord - 0.5),
+          mix(0.16, 0.34, vBlur),
+          vBlur * 0.5,
+          gl_FragCoord.xy + uT
+        );
         fragColor = vec4(vec3(glow * 1.6), glow);
       }`;
       const orbProg = gl.createProgram();
@@ -201,6 +231,7 @@
       gl.linkProgram(orbProg);
       const uResO = gl.getUniformLocation(orbProg, "uRes");
       const uSizeO = gl.getUniformLocation(orbProg, "uSize");
+      const uTO = gl.getUniformLocation(orbProg, "uT");
       const orbVbo = gl.createBuffer();
 
       // Fade pass — translucent background quad instead of a hard
@@ -1166,6 +1197,7 @@
           gl.useProgram(orbProg);
           gl.uniform2f(uResO, W, H);
           gl.uniform1f(uSizeO, 7 * DPR);
+          gl.uniform1f(uTO, (t * 60.0) % 1024.0);
           gl.bindBuffer(gl.ARRAY_BUFFER, orbVbo);
           gl.bufferData(
             gl.ARRAY_BUFFER,
@@ -1182,6 +1214,7 @@
         gl.useProgram(prog);
         gl.uniform2f(uRes, W, H);
         gl.uniform1f(uSize, (3.2 - vm * 1.0) * DPR);
+        gl.uniform1f(uT, (t * 60.0) % 1024.0);
         gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
         gl.bufferSubData(gl.ARRAY_BUFFER, 0, pos);
         gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
