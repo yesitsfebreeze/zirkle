@@ -1,5 +1,9 @@
 # CHANGELOG
 
+Decided by: user, 2026-07-31 — outer dots lead the grid→ring morph so the circle closes from outside in, instead of the whole grid shrinking as a rectangle
+
+- 2026-07-31: per-dot morph clock — morphLead (0 at grid center, 1 at corners, baked in layout) offsets each dot's start by (1-lead)·MORPH_SPREAD and rescales by 1/(1-MORPH_SPREAD); shape-key lerp uses vmi instead of the global vm. MORPH_SPREAD=0.5, so corners sit on the ring at vm=0.50 exactly as center dots begin. Endpoints verified unchanged for every lead: vm=0 is still the full grid, vm=1 still the identical ring
+
 Decided by: user, 2026-07-31 — residual pulse traced to lifeMigrate teleporting home slots on the tick boundary; migration now glides per-dot at its own rate
 
 - 2026-07-31: lifeMigrate writes homeTX/homeTY targets instead of assigning homeX/homeY — homeX walks toward the target at Math.hypot(cellW,cellH)/LIFE_STEP_T scaled by a per-dot homeDur (0.6–2.2), clamped so it never overshoots. The teleport moved a full cell diagonal in one frame (~2206px/s) for every migrating dot at the same instant, and the shader's opacity rides velocity, so the whole grid flashed together each generation; glide peak is 14–51px/s spread over 0.6–2.2 generations with per-dot scatter
