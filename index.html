@@ -562,7 +562,6 @@
         if (linkHue) linkHue.fill(globalHue);
         soonEl.style.color = `hsla(${globalHue * 360}, 90%, 65%, 0.85)`;
       }
-      rollGlobalHue();
 
       // Thinking links — random pairs flash a line, then ease out fast
       let MAX_LINKS = 80; // fixed count, always active — frequency varies, count doesn't
@@ -581,6 +580,7 @@
         orbData = new Float32Array(MAX_LINKS * 4); // x,y,alpha,hue per orb
       }
       allocLinkArrays();
+      rollGlobalHue();
 
       function layout() {
         W = canvas.clientWidth * DPR;
