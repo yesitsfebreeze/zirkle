@@ -1,5 +1,8 @@
 # CHANGELOG
 
+Decided by: user, 2026-07-31 — slogan hierarchy: zirkle big and centered, "We come, full" muted prefix, soon™ bare superscript (parens were only markup notation)
+
+- 2026-07-31: dropped parens around soon™; line2 zirkle clamp(3rem,9vw,7rem) at 0.92 alpha, prefix line 0.4 alpha, sup 0.3em
 Decided by: user, 2026-07-31 — slogan replaces the big title: "We come, full / zirkle(soon™)", soon™ superscript; one global accent hue shared by link dots and soon™, re-rolled per click (recovered from a compacted prior session)
 
 - 2026-07-31: h1 removed, two-line slogan with sup soon™; global hue (rollGlobalHue) replaces per-link random hue — click re-rolls it, fills linkHue, recolors soon™
