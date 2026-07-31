@@ -1,5 +1,10 @@
 # CHANGELOG
 
+Decided by: user, 2026-07-31 — hairline guide lines under the bezier orbs, and the orbs come off dof() entirely (defocus read as mush at that size). Reverses the earlier "dots only, never lines" rule.
+
+- 2026-07-31: new lineProg (gl.LINES) draws each active bezier tessellated into BEZ_SEG=12 segments at LINE_A=0.055 alpha, fading to 0.022 at full vortex — roughly 1:18 to 1:45 against the orb core under additive blend, so it reads as a hint of the path rather than a stroke. lineData sized MAX_LINKS*BEZ_SEG*2*3 floats; verified exact fit with no overflow at the randomize ceiling of 160 links (11519 highest index vs 11520 capacity).
+- 2026-07-31: orb shaders no longer include dofFn — no gaussian, no grain. Crisp `smoothstep(0.5, 0.12, d)` point; the aBlur attribute is retained but now drives only a size swell (7→13.3px) and a 1.8x brightness lift over the last quarter of the ride, preserving the arrival signal without the defocus. Grid dots still own the single dof() model.
+
 Decided by: user, 2026-07-31 — one defocus model for the whole page: every blurred thing takes a single 0..1 amount and calls the same dof()
 
 - 2026-07-31: `bokehFn` replaced by `dofFn`, now injected into all four shaders (particle vert+frag, orb vert+frag) instead of only the two fragment shaders. Blur parameters collapse to four named constants — DOF_SIGMA_SHARP 0.085, DOF_SIGMA_BLUR 0.30, DOF_GRAIN 0.55, DOF_GROW 4.6 — and both the sprite growth curve (`dofSize`) and the gaussian+grain (`dof`) read from them, so size and falloff can no longer drift apart. Callers pass only an amount: grid dots use `1.0 - clamp(speed)`, orbs use arrival progress.

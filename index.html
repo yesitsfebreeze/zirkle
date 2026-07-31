@@ -197,37 +197,59 @@
       const uSize = gl.getUniformLocation(prog, "uSize");
       const uT = gl.getUniformLocation(prog, "uT");
 
-      // Orbs — the only thing a link ever draws: one solid point per
-      // link, riding its bezier at the link's own age/life progress
+      // Bezier guide line — hairline, barely there: it exists only to
+      // show where an orb is headed, so it must never compete with the
+      // dot riding it
+      const lineVertSrc = `#version 300 es
+      in vec2 aPos;
+      in float aAlpha;
+      uniform vec2 uRes;
+      out float vAlpha;
+      void main() {
+        vec2 clip = (aPos / uRes) * 2.0 - 1.0;
+        gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);
+        vAlpha = aAlpha;
+      }`;
+      const lineFragSrc = `#version 300 es
+      precision highp float;
+      in float vAlpha;
+      out vec4 fragColor;
+      void main() {
+        fragColor = vec4(vec3(vAlpha), vAlpha);
+      }`;
+      const lineProg = gl.createProgram();
+      gl.bindAttribLocation(lineProg, 0, "aPos");
+      gl.bindAttribLocation(lineProg, 1, "aAlpha");
+      gl.attachShader(lineProg, compile(gl.VERTEX_SHADER, lineVertSrc));
+      gl.attachShader(lineProg, compile(gl.FRAGMENT_SHADER, lineFragSrc));
+      gl.linkProgram(lineProg);
+      const uResL = gl.getUniformLocation(lineProg, "uRes");
+      const lineVbo = gl.createBuffer();
+
+      // Orbs — the dot riding each bezier. Deliberately NOT routed
+      // through dof(): defocus reads as mush at this size, so the orb
+      // stays a crisp point and signals arrival by swelling instead
       const orbVertSrc = `#version 300 es
       in vec2 aPos;
       in float aBlur;
       uniform vec2 uRes;
       uniform float uSize;
       out float vBlur;
-      ${dofFn}
       void main() {
         vec2 clip = (aPos / uRes) * 2.0 - 1.0;
         gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);
-        // Same growth curve as a defocusing grid dot
-        gl_PointSize = uSize * dofSize(aBlur);
+        gl_PointSize = uSize * (1.0 + aBlur * 0.9);
         vBlur = aBlur;
       }`;
       const orbFragSrc = `#version 300 es
       precision highp float;
       in float vBlur;
-      uniform float uT;
       out vec4 fragColor;
-      ${dofFn}
       void main() {
-        // Identical circle of confusion to the grid dots — same sigma
-        // curve, same grain, driven by arrival progress instead of speed
-        float glow = dof(
-          length(gl_PointCoord - 0.5),
-          vBlur,
-          gl_FragCoord.xy + uT
-        );
-        fragColor = vec4(vec3(glow * 1.6), glow);
+        float d = length(gl_PointCoord - 0.5);
+        float glow = smoothstep(0.5, 0.12, d);
+        float lift = 1.0 + vBlur * 0.8;
+        fragColor = vec4(vec3(glow * 1.6 * lift), glow);
       }`;
       const orbProg = gl.createProgram();
       gl.bindAttribLocation(orbProg, 0, "aPos");
@@ -591,9 +613,11 @@
 
       // Thinking links — random pairs flash a line, then ease out fast
       let MAX_LINKS = 80; // fixed count, always active — frequency varies, count doesn't
-      let linkA, linkB, linkAge, linkLife, orbData;
+      let linkA, linkB, linkAge, linkLife, orbData, lineData;
+      const BEZ_SEG = 12; // tessellation of the guide line
+      const LINE_A = 0.055; // guide-line alpha — a hint, not a stroke
       // Quadratic bezier per link, elbowed at a grid-axis corner —
-      // walked by a single orb, never drawn as a stroke or a trail
+      // walked by a single orb over a hairline guide of the same curve
       const LINK_DELAY_MAX = 4.0; // longest random hold before an orb departs
       function allocLinkArrays() {
         linkA = new Int32Array(MAX_LINKS);
@@ -601,6 +625,8 @@
         linkAge = new Float32Array(MAX_LINKS);
         linkLife = new Float32Array(MAX_LINKS); // always > 0 — no free/dead slot
         orbData = new Float32Array(MAX_LINKS * 3); // x,y,blur per orb
+        // BEZ_SEG segments per curve, 2 endpoints each, x,y,alpha per vertex
+        lineData = new Float32Array(MAX_LINKS * BEZ_SEG * 2 * 3);
       }
       allocLinkArrays();
 
@@ -1128,6 +1154,7 @@
 
         // Age links, place one orb per link on its bezier
         let orbCount = 0;
+        let lineVerts = 0;
         for (let s = 0; s < MAX_LINKS; s++) {
           linkAge[s] += dt;
           const p = linkAge[s] / linkLife[s];
@@ -1178,9 +1205,31 @@
           orbData[oo] = muO * muO * x0 + 2 * muO * p * cx + p * p * x2;
           orbData[oo + 1] = muO * muO * y0 + 2 * muO * p * cy + p * p * y2;
           // Arrival flash: nothing for most of the ride, then a fast
-          // bloom over the last quarter as t approaches its endpoint
+          // swell over the last quarter as t approaches its endpoint
           orbData[oo + 2] = Math.max(0, (p - 0.75) / 0.25);
           orbCount++;
+
+          // Guide line: the whole curve, tessellated once and drawn
+          // faint. Fades out with the vortex like the orbs do.
+          const la = LINE_A * (1 - vm * 0.6);
+          let bpx = x0,
+            bpy = y0;
+          for (let q = 1; q <= BEZ_SEG; q++) {
+            const u = q / BEZ_SEG,
+              mu = 1 - u;
+            const bx = mu * mu * x0 + 2 * mu * u * cx + u * u * x2;
+            const by = mu * mu * y0 + 2 * mu * u * cy + u * u * y2;
+            const lo = lineVerts * 3;
+            lineData[lo] = bpx;
+            lineData[lo + 1] = bpy;
+            lineData[lo + 2] = la;
+            lineData[lo + 3] = bx;
+            lineData[lo + 4] = by;
+            lineData[lo + 5] = la;
+            lineVerts += 2;
+            bpx = bx;
+            bpy = by;
+          }
         }
 
         if (vm > 0.02) {
@@ -1197,6 +1246,22 @@
         } else {
           gl.clearColor(0.04, 0.04, 0.05, 1.0);
           gl.clear(gl.COLOR_BUFFER_BIT);
+        }
+
+        if (lineVerts > 0) {
+          gl.useProgram(lineProg);
+          gl.uniform2f(uResL, W, H);
+          gl.bindBuffer(gl.ARRAY_BUFFER, lineVbo);
+          gl.bufferData(
+            gl.ARRAY_BUFFER,
+            lineData.subarray(0, lineVerts * 3),
+            gl.DYNAMIC_DRAW,
+          );
+          gl.enableVertexAttribArray(0);
+          gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 12, 0);
+          gl.enableVertexAttribArray(1);
+          gl.vertexAttribPointer(1, 1, gl.FLOAT, false, 12, 8);
+          gl.drawArrays(gl.LINES, 0, lineVerts);
         }
 
         if (orbCount > 0) {
