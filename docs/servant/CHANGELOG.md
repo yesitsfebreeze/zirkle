@@ -1,5 +1,10 @@
 # CHANGELOG
 
+Decided by: user, 2026-07-31 — vortex collapse point is the circle's own radius rather than proximity to the centre, plus hot-loop performance work
+
+- 2026-07-31: vmTarget remapped from `(R - md)/(R - RT)` to `(VM_OUTER - md)/(VM_OUTER - R)` with VM_OUTER = R*2.2 set in layout — the full fast circle is now drawn the moment the cursor reaches R (was only at 0.35R, deep inside); past R, depth drives cs alone and vm stays pinned at 1. RT keeps its old value but is now purely the cs depth reference.
+- 2026-07-31: per-dot loop perf — replaced all six hot Math.hypot calls with `Math.sqrt(x*x+y*y)` (measured 6.3x faster; 299us -> 48us per frame at 6400 dots, saving ~251us/frame) and hoisted `ka = 1 - Math.exp(-dt*arrRate)` out of the loop (arrRate carries no per-dot term, so it was N redundant exp() calls per frame). Verified equivalent: hypot vs sqrt agree to 3.9e-16 relative over 400k samples in +/-2000px, and the hoisted ka is bit-identical. Remaining Math.hypot calls are all cold paths (layout, once-per-frame, or the <=160-iteration link loop).
+
 Decided by: user, 2026-07-31 — sparks deleted outright rather than damped, and rotation direction is assigned from arc rank so the two streams interleave evenly around the whole circumference
 
 - 2026-07-31: removed the escape/spark system entirely — esc/escAcc arrays, the inward-kick spawner, the interior-noise-field force branch and the `ka *= 0.1` free-flight case are all gone; every dot is now permanently on the ring track, so the radial pin and slot tracking apply without exception. dirn assignment moved into the ring-slot rank loop: `dirn[order[r]] = r & 1 ? 1 : -1`. Measured: every 45° sector is 50/50 CW/CCW and the longest same-direction run of adjacent slots is 1, against 1554 under the contiguous-halves rule — no bearing is dominated by one direction and there is no seam where counter-rotating arcs pull apart. alignK reverted to `vm * 13` (the cs boost added in 0887670 only made sense for contiguous halves; with neighbours counter-rotating a high gain just cancels).

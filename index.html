@@ -241,8 +241,9 @@
         CX = 0,
         CY = 0,
         R = 0,
-        RT = 0, // inner radius: full vortex reached here
+        RT = 0, // depth reference: cs reaches 1 between here and DEAD_R
         DEAD_R = 0, // dead band: inside this, everything is pinned at max
+        VM_OUTER = 0, // outer edge of the vortex ramp
         SEP_R = 0,
         SEP_R2 = 0,
         COLL_R = 0;
@@ -568,6 +569,7 @@
           ) * DPR;
         RT = R * 0.35;
         DEAD_R = R * 0.06;
+        VM_OUTER = R * 2.2; // vortex starts ramping here, complete at R
         SEP_R = SEP_R_CSS * DPR;
         SEP_R2 = SEP_R * SEP_R;
         COLL_R = COLL_R_CSS * DPR;
@@ -770,10 +772,12 @@
           ? Math.min(1, Math.max(0, 1 - md / maxDist))
           : 0;
         const attract = closeness * closeness;
-        // Shape key: grid↔circle is a linear blend scrubbed by cursor
-        // distance — 0 at the ring outline, 1 at RT near the center
+        // Shape key: the collapse point is the circle's own radius, not
+        // the centre — the ramp runs from VM_OUTER inward and the full
+        // fast circle is drawn the moment the cursor reaches R. Going
+        // deeper past that only drives cs, never vm.
         const vmTarget = mouseOver
-          ? Math.min(1, Math.max(0, (R - md) / (R - RT)))
+          ? Math.min(1, Math.max(0, (VM_OUTER - md) / (VM_OUTER - R)))
           : 0;
         vortexMix += (vmTarget - vortexMix) * (1 - Math.exp(-dt * 14));
         const vm = vortexMix;
@@ -927,6 +931,8 @@
         // One cell-diagonal per generation is the nominal glide speed;
         // homeDur stretches or compresses it per dot
         const homeBase = Math.hypot(cellW, cellH) / LIFE_STEP_T;
+        // Loop invariant — was one Math.exp per dot per frame
+        const ka = 1 - Math.exp(-dt * arrRate);
         for (let i = 0; i < N; i++) {
           const px = pos[i * 2],
             py = pos[i * 2 + 1];
@@ -956,7 +962,7 @@
           // dot takes its own time so migrations never land in unison
           const hdx = homeTX[i] - homeX[i],
             hdy = homeTY[i] - homeY[i];
-          const hdd = Math.hypot(hdx, hdy);
+          const hdd = Math.sqrt(hdx * hdx + hdy * hdy);
           if (hdd > 1e-4) {
             const f = Math.min(1, (dt * homeBase) / (homeDur[i] * hdd));
             homeX[i] += hdx * f;
@@ -994,7 +1000,7 @@
           if (pull > 0.001) {
             const dx = mx - px,
               dy = my - py;
-            const d = Math.hypot(dx, dy) + 1e-3;
+            const d = Math.sqrt(dx * dx + dy * dy) + 1e-3;
             const a = pull * 3200 * DPR * (d / (d + 300 * DPR));
             fx += (dx / d) * a;
             fy += (dy / d) * a;
@@ -1006,7 +1012,7 @@
           if (idleW > 0.001) {
             const rx = px - CX,
               ry = py - CY;
-            const r = Math.hypot(rx, ry) + 1e-3;
+            const r = Math.sqrt(rx * rx + ry * ry) + 1e-3;
             const dr = r - R;
             const ad = Math.abs(dr);
             const band = 70 * DPR;
@@ -1020,7 +1026,7 @@
 
           let vx = (vel[i * 2] + fx * dt) * damp;
           let vy = (vel[i * 2 + 1] + fy * dt) * damp;
-          const sp = Math.hypot(vx, vy);
+          const sp = Math.sqrt(vx * vx + vy * vy);
           if (sp > vmax) {
             vx *= vmax / sp;
             vy *= vmax / sp;
@@ -1031,7 +1037,6 @@
           // step toward the target — never overshoots, uniform timing
           let nxp = px + vx * dt,
             nyp = py + vy * dt;
-          const ka = 1 - Math.exp(-dt * arrRate);
           nxp += (tgx - nxp) * ka;
           nyp += (tgy - nyp) * ka;
           // Radial-only projection: at full depth, pin the dot to its
@@ -1040,7 +1045,7 @@
           if (vm > 0.5) {
             const rrx = nxp - CX,
               rry = nyp - CY;
-            const rl = Math.hypot(rrx, rry) + 1e-3;
+            const rl = Math.sqrt(rrx * rrx + rry * rry) + 1e-3;
             // Gain is clamped to 1: this is a positional correction, so
             // anything above 1 throws the dot past the target radius and
             // further out every frame. At 1 it is an exact lerp onto tr
@@ -1061,10 +1066,12 @@
           // dead cells stay the filled grid — migration (above) still
           // walks alive cells outward, so the holes drift radially
           const lv = lifeFrom[i] + (lifeTo[i] - lifeFrom[i]) * lifeF;
+          const mvx = nxp - px,
+            mvy = nyp - py;
           speedBuf[i] =
-            (Math.hypot(nxp - px, nyp - py) / dt) *
-            spdNorm *
-            (1 - idleW * lv * 0.85);
+            ((Math.sqrt(mvx * mvx + mvy * mvy) / dt) *
+              spdNorm *
+              (1 - idleW * lv * 0.85));
           pos[i * 2] = nxp;
           pos[i * 2 + 1] = nyp;
         }
