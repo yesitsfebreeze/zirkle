@@ -1,5 +1,9 @@
 # CHANGELOG
 
+Decided by: user, 2026-07-31 — split the overlay across two faces: Cardo for the wordmark, Monda retained for soon™
+
+- 2026-07-31: both families now load in a single Google Fonts request (verified HTTP 200, serves Cardo and Monda). .overlay keeps Cardo/Georgia/serif; p.line3 overrides to Monda/sans, so the small mark reverts to the face it had before 26177b2. Serif wordmark against sans small caps is the intended pairing. Font lineage: TT Bluescreens → Barlow Condensed → Monda → Cardo for the wordmark only, with Monda retained for soon™.
+
 Decided by: user, 2026-07-31 — overlay font switches to Cardo
 
 - 2026-07-31: font stack Monda → Cardo (verified HTTP 200, serves 400/700 + 400 italic); fallbacks changed sans → Georgia/Times/serif to match. Wordmark letter-spacing -0.015em → 0: the negative tracking was chosen for a sans display face and collides serifs at that size. Font lineage is now TT Bluescreens → Barlow Condensed → Monda → Cardo.
