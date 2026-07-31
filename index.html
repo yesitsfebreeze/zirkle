@@ -110,41 +110,51 @@
 
       const DPR = Math.min(window.devicePixelRatio || 1, 3);
 
+      // THE defocus model — one implementation, one set of constants,
+      // shared by every blurred thing on the page. Anything that blurs
+      // takes a single 0..1 amount and calls dofSize/dof; there is no
+      // second blur curve anywhere. A true gaussian circle of confusion,
+      // shifted so it reaches zero exactly at the sprite edge and
+      // rescaled so the peak stays 1 — spreading never dims the centre.
+      // Grain rides the same amount, so defocus always brings noise.
+      const dofFn = `
+      const float DOF_SIGMA_SHARP = 0.085;
+      const float DOF_SIGMA_BLUR = 0.30;
+      const float DOF_GRAIN = 0.55;
+      const float DOF_GROW = 4.6;
+
+      float dofSize(float blur) {
+        return mix(1.0, DOF_GROW, blur);
+      }
+      float hash12(vec2 p) {
+        vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+        p3 += dot(p3, p3.yzx + 33.33);
+        return fract((p3.x + p3.y) * p3.z);
+      }
+      float dof(float d, float blur, vec2 seed) {
+        float sigma = mix(DOF_SIGMA_SHARP, DOF_SIGMA_BLUR, blur);
+        float s2 = 2.0 * sigma * sigma;
+        float g = exp(-d * d / s2);
+        float edge = exp(-0.25 / s2);
+        g = max(0.0, (g - edge) / (1.0 - edge));
+        float n = hash12(seed);
+        float grain = DOF_GRAIN * blur;
+        return g * (1.0 - grain + grain * n);
+      }`;
+
       const vertSrc = `#version 300 es
       in vec2 aPos;
       in float aSpeed;
       uniform vec2 uRes;
       uniform float uSize;
       out float vSpeed;
+      ${dofFn}
       void main() {
         vec2 clip = (aPos / uRes) * 2.0 - 1.0;
         gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);
-        // A defocused dot needs room to spread into: slow dots get a
-        // bigger sprite so the soft falloff is actually visible, fast
-        // dots shrink back to a tight point
-        float sharp = clamp(aSpeed, 0.0, 1.0);
-        gl_PointSize = uSize * mix(4.6, 1.0, sharp);
+        // A dot blurs as it slows: blur is just 1 - speed
+        gl_PointSize = uSize * dofSize(1.0 - clamp(aSpeed, 0.0, 1.0));
         vSpeed = aSpeed;
-      }`;
-
-      // Shared bokeh core: a true gaussian, shifted so it reaches zero
-      // exactly at the sprite edge and rescaled so the peak stays 1 —
-      // spreading the disc never dims its centre. Grain is multiplied
-      // in, heaviest where the blur is widest, so an out-of-focus dot
-      // breaks up into sensor noise instead of reading as a clean blob.
-      const bokehFn = `
-      float hash12(vec2 p) {
-        vec3 p3 = fract(vec3(p.xyx) * 0.1031);
-        p3 += dot(p3, p3.yzx + 33.33);
-        return fract((p3.x + p3.y) * p3.z);
-      }
-      float bokeh(float d, float sigma, float grain, vec2 seed) {
-        float s2 = 2.0 * sigma * sigma;
-        float g = exp(-d * d / s2);
-        float edge = exp(-0.25 / s2);
-        g = max(0.0, (g - edge) / (1.0 - edge));
-        float n = hash12(seed);
-        return g * (1.0 - grain + grain * n);
       }`;
 
       const fragSrc = `#version 300 es
@@ -152,17 +162,14 @@
       in float vSpeed;
       uniform float uT;
       out vec4 fragColor;
-      ${bokehFn}
+      ${dofFn}
       void main() {
         float sharp = clamp(vSpeed, 0.0, 1.0);
         // Depth of field: a still dot is a wide, grainy circle of
         // confusion; speed pulls it back to a tight clean point
-        float sigma = mix(0.30, 0.085, sharp);
-        float grain = mix(0.55, 0.0, sharp);
-        float a = bokeh(
+        float a = dof(
           length(gl_PointCoord - 0.5),
-          sigma,
-          grain,
+          1.0 - sharp,
           gl_FragCoord.xy + uT
         );
         // Monochrome, and every dot visible: 75% floor on both
@@ -198,12 +205,12 @@
       uniform vec2 uRes;
       uniform float uSize;
       out float vBlur;
+      ${dofFn}
       void main() {
         vec2 clip = (aPos / uRes) * 2.0 - 1.0;
         gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);
-        // Swells as it lands — the sprite needs the extra pixels for
-        // the softened edge to register as a flash rather than a fade
-        gl_PointSize = uSize * (1.0 + aBlur * 3.6);
+        // Same growth curve as a defocusing grid dot
+        gl_PointSize = uSize * dofSize(aBlur);
         vBlur = aBlur;
       }`;
       const orbFragSrc = `#version 300 es
@@ -211,14 +218,13 @@
       in float vBlur;
       uniform float uT;
       out vec4 fragColor;
-      ${bokehFn}
+      ${dofFn}
       void main() {
-        // Same circle of confusion as the grid dots: on arrival the orb
-        // defocuses into a wide grainy bloom instead of a hard point
-        float glow = bokeh(
+        // Identical circle of confusion to the grid dots — same sigma
+        // curve, same grain, driven by arrival progress instead of speed
+        float glow = dof(
           length(gl_PointCoord - 0.5),
-          mix(0.16, 0.34, vBlur),
-          vBlur * 0.5,
+          vBlur,
           gl_FragCoord.xy + uT
         );
         fragColor = vec4(vec3(glow * 1.6), glow);

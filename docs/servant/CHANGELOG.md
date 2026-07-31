@@ -1,5 +1,10 @@
 # CHANGELOG
 
+Decided by: user, 2026-07-31 — one defocus model for the whole page: every blurred thing takes a single 0..1 amount and calls the same dof()
+
+- 2026-07-31: `bokehFn` replaced by `dofFn`, now injected into all four shaders (particle vert+frag, orb vert+frag) instead of only the two fragment shaders. Blur parameters collapse to four named constants — DOF_SIGMA_SHARP 0.085, DOF_SIGMA_BLUR 0.30, DOF_GRAIN 0.55, DOF_GROW 4.6 — and both the sprite growth curve (`dofSize`) and the gaussian+grain (`dof`) read from them, so size and falloff can no longer drift apart. Callers pass only an amount: grid dots use `1.0 - clamp(speed)`, orbs use arrival progress.
+- Behaviour change: the orb's in-flight sigma was 0.16 against the grid's 0.085, and its grain peaked at 0.5 against 0.55 — two separate curves. Unified, so a travelling orb is now rendered slightly tighter than before; its 7px base size still distinguishes it from a 3.2px grid dot. Verified all four assembled shaders keep `#version 300 es` first and define dofSize/hash12/dof/main exactly once each.
+
 Decided by: user, 2026-07-31 — blur means depth of field: a true gaussian circle of confusion with sensor grain, not a widened smoothstep edge
 
 - 2026-07-31: added a shared `bokehFn` GLSL snippet (hash12 + bokeh) interpolated into both the grid-dot and orb fragment shaders. `bokeh()` is a real gaussian `exp(-d²/2σ²)`, shifted by its value at the sprite edge and rescaled so it reaches exactly 0 at d=0.5 while peaking at 1 — no normalise-by-centre hack needed, a gaussian peaks at 1 by construction. Grain is multiplied in via a hash12 dither seeded on `gl_FragCoord.xy + uT`, so out-of-focus dots break into animated sensor noise; new uT uniform on both programs, fed `(t*60) % 1024`.
