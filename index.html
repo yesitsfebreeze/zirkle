@@ -198,9 +198,8 @@
       const uRes = gl.getUniformLocation(prog, "uRes");
       const uSize = gl.getUniformLocation(prog, "uSize");
 
-      // Bezier guide line — hairline, barely there: it exists only to
-      // show where an orb is headed, so it must never compete with the
-      // dot riding it
+      // Connection line — a single segment between the two live dots,
+      // faint enough that the dots stay the subject
       const lineVertSrc = `#version 300 es
       in vec2 aPos;
       in float aAlpha;
@@ -227,7 +226,7 @@
       const uResL = gl.getUniformLocation(lineProg, "uRes");
       const lineVbo = gl.createBuffer();
 
-      // Orbs — the dot riding each bezier. Same constant sprite as every
+      // Orbs — the dot riding each chord. Same constant sprite as every
       // other dot; arrival is signalled by brightness alone, so nothing
       // here varies per-vertex except one float.
       const orbVertSrc = `#version 300 es
@@ -415,7 +414,7 @@
             // Negative age is a dead wait: the orb holds off until its
             // own random delay elapses, so links never depart in step
             linkAge[slot] = -Math.random() * LINK_DELAY_MAX;
-            // 2.5x longer life — the orb rides its bezier at p=age/life,
+            // 2.5x longer life — the orb rides the chord at p=age/life,
             // so a longer life is directly a slower, calmer glide
             linkLife[slot] = (3.0 + Math.random() * 3.5) * (1 - core * 0.92);
             return;
@@ -622,10 +621,10 @@
       // Thinking links — random pairs flash a line, then ease out fast
       let MAX_LINKS = 80; // fixed count, always active — frequency varies, count doesn't
       let linkA, linkB, linkAge, linkLife, orbData, lineData;
-      const BEZ_SEG = 12; // tessellation of the guide line
-      const LINE_A = 0.055; // guide-line alpha — a hint, not a stroke
-      // Quadratic bezier per link, elbowed at a grid-axis corner —
-      // walked by a single orb over a hairline guide of the same curve
+      const LINE_A = 0.35; // connection-line alpha
+      // Straight chord per link, redrawn from live dot positions every
+      // frame — the curve emerges from the endpoints moving, not from
+      // any control point
       const LINK_DELAY_MAX = 4.0; // longest random hold before an orb departs
       function allocLinkArrays() {
         linkA = new Int32Array(MAX_LINKS);
@@ -633,8 +632,8 @@
         linkAge = new Float32Array(MAX_LINKS);
         linkLife = new Float32Array(MAX_LINKS); // always > 0 — no free/dead slot
         orbData = new Float32Array(MAX_LINKS * 3); // x,y,blur per orb
-        // BEZ_SEG segments per curve, 2 endpoints each, x,y,alpha per vertex
-        lineData = new Float32Array(MAX_LINKS * BEZ_SEG * 2 * 3);
+        // one segment per link, 2 endpoints, x,y,alpha per vertex
+        lineData = new Float32Array(MAX_LINKS * 2 * 3);
       }
       allocLinkArrays();
 
@@ -1190,7 +1189,10 @@
           pos[i * 2 + 1] = nyp;
         }
 
-        // Age links, place one orb per link on its bezier
+        // Age links: one orb per link, walking straight from A to B.
+        // Both endpoints are live dots being moved by the sim, so the
+        // straight line is re-solved every frame and the path the orb
+        // actually traces through space comes out curved for free.
         let orbCount = 0;
         let lineVerts = 0;
         for (let s = 0; s < MAX_LINKS; s++) {
@@ -1211,63 +1213,26 @@
             y0 = pos[ia * 2 + 1];
           const x2 = pos[ib * 2],
             y2 = pos[ib * 2 + 1];
-          // Elbow control point sits on the grid axis of one endpoint
-          // (its x or y), so both legs run horizontal/vertical near
-          // the dots — alternated by link slot so traces don't all
-          // bend the same way
-          let cx = s & 1 ? x0 : x2;
-          let cy = s & 1 ? y2 : y0;
 
-          // If the straight run would cut through the circle, bow the
-          // control point outward instead — closest approach of the
-          // segment to center, pushed clear to R plus a margin
-          const sdx = x2 - x0,
-            sdy = y2 - y0;
-          const segLenSq = sdx * sdx + sdy * sdy || 1;
-          const ct = Math.min(
-            1,
-            Math.max(0, ((CX - x0) * sdx + (CY - y0) * sdy) / segLenSq),
-          );
-          const clX = x0 + ct * sdx,
-            clY = y0 + ct * sdy;
-          const clR = Math.hypot(clX - CX, clY - CY);
-          const clearR = R + 40 * DPR;
-          if (clR < clearR) {
-            const bAng = Math.atan2(clY - CY, clX - CX);
-            cx = CX + Math.cos(bAng) * clearR;
-            cy = CY + Math.sin(bAng) * clearR;
-          }
-          // Orb rides the same curve at the link's own age/life progress
-          const muO = 1 - p;
+          // Orb walks the chord linearly
           const oo = orbCount * 3;
-          orbData[oo] = muO * muO * x0 + 2 * muO * p * cx + p * p * x2;
-          orbData[oo + 1] = muO * muO * y0 + 2 * muO * p * cy + p * p * y2;
+          orbData[oo] = x0 + (x2 - x0) * p;
+          orbData[oo + 1] = y0 + (y2 - y0) * p;
           // Arrival flash: nothing for most of the ride, then a fast
           // swell over the last quarter as t approaches its endpoint
           orbData[oo + 2] = Math.max(0, (p - 0.75) / 0.25);
           orbCount++;
 
-          // Guide line: the whole curve, tessellated once and drawn
-          // faint. Fades out with the vortex like the orbs do.
+          // One segment, endpoint to endpoint — no tessellation
           const la = LINE_A * (1 - vm * 0.6);
-          let bpx = x0,
-            bpy = y0;
-          for (let q = 1; q <= BEZ_SEG; q++) {
-            const u = q / BEZ_SEG,
-              mu = 1 - u;
-            const bx = mu * mu * x0 + 2 * mu * u * cx + u * u * x2;
-            const by = mu * mu * y0 + 2 * mu * u * cy + u * u * y2;
-            const lo = lineVerts * 3;
-            lineData[lo] = bpx;
-            lineData[lo + 1] = bpy;
-            lineData[lo + 2] = la;
-            lineData[lo + 3] = bx;
-            lineData[lo + 4] = by;
-            lineData[lo + 5] = la;
-            lineVerts += 2;
-            bpx = bx;
-            bpy = by;
-          }
+          const lo = lineVerts * 3;
+          lineData[lo] = x0;
+          lineData[lo + 1] = y0;
+          lineData[lo + 2] = la;
+          lineData[lo + 3] = x2;
+          lineData[lo + 4] = y2;
+          lineData[lo + 5] = la;
+          lineVerts += 2;
         }
 
         if (vm > 0.02) {

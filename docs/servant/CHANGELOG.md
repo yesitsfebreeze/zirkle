@@ -1,5 +1,12 @@
 # CHANGELOG
 
+Decided by: user, 2026-07-31 — bezier removed entirely; links are a straight chord between two live dots, re-solved every frame, at 0.35 opacity
+
+- 2026-07-31: dropped the quadratic bezier, its elbow control point, the BEZ_SEG=12 tessellation loop and the clearR center-avoidance bow. Orb position is now `lerp(A, B, p)` and the line is one segment endpoint-to-endpoint. Because both endpoints are live dots the sim keeps moving, the chord is re-solved each frame and the orb's traced path through space still comes out curved — the curvature now emerges from the endpoints rather than from a control point.
+- 2026-07-31: LINE_A 0.055 → 0.35 as specified; the vm fade (×(1 - vm*0.6)) is kept. lineData shrinks from MAX_LINKS*BEZ_SEG*2*3 to MAX_LINKS*2*3 floats (11520 → 960 at the 160-link ceiling, 12x); 12x fewer segments submitted, and per link this also drops one hypot, one atan2, one cos, one sin and one divide.
+- Verified removing clearR does NOT let lines cut the circle: respawnLink already caps pair distance at 240px, and a 240px chord between two ring dots stays 318px from centre = 94% of R. The bow was redundant given that cap.
+- Closes the msg-130 "dotted bezier lines on the closed circle" item as moot — there is no bezier left to dot.
+
 Decided by: user, 2026-07-31 — full-history reconcile across all 10 sessions (258 user messages, oldest→newest); two genuine gaps closed, one flagged as superseded
 
 - 2026-07-31: audited every instruction in the project's whole message history against the code. 39/39 surviving feature requirements verified present; 7 deliberately-removed subsystems (FBO recursion, mirrored mini-ring, 3D shapes, spark stragglers, chromatic aberration, hue/colour, gaussian dof) confirmed absent.
