@@ -1,5 +1,9 @@
 # CHANGELOG
 
+Decided by: user, 2026-07-31 — grid dots go monochrome: 75% white base, no chromatic split
+
+- 2026-07-31: particle fragment shader collapsed from three offset RGB lobes to a single grey disc — the neon came from chromatic aberration, not a colour uniform; base `b` 0.3+0.8·vSpeed → 0.75+0.25·vSpeed clamped to 1, so a still dot is 75% white and motion carries it to full. uAb uniform and its getUniformLocation/uniform1f plumbing deleted. Link orbs and soon™ keep the global accent hue (explicit earlier request, left untouched)
+
 Decided by: user, 2026-07-31 — outer dots lead the grid→ring morph so the circle closes from outside in, instead of the whole grid shrinking as a rectangle
 
 - 2026-07-31: per-dot morph clock — morphLead (0 at grid center, 1 at corners, baked in layout) offsets each dot's start by (1-lead)·MORPH_SPREAD and rescales by 1/(1-MORPH_SPREAD); shape-key lerp uses vmi instead of the global vm. MORPH_SPREAD=0.5, so corners sit on the ring at vm=0.50 exactly as center dots begin. Endpoints verified unchanged for every lead: vm=0 is still the full grid, vm=1 still the identical ring

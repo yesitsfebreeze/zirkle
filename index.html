@@ -122,20 +122,16 @@
       const fragSrc = `#version 300 es
       precision highp float;
       in float vSpeed;
-      uniform float uAb; // chromatic aberration: 1 = grid neon, 0 = circle white
       out vec4 fragColor;
       void main() {
-        vec2 p = gl_PointCoord - 0.5;
-        vec2 off = vec2(0.22 * uAb, 0.0);
-        float ar = smoothstep(0.5, 0.15, length(p - off));
-        float ag = smoothstep(0.5, 0.15, length(p));
-        float ab = smoothstep(0.5, 0.15, length(p + off));
-        float b = 0.3 + 0.8 * clamp(vSpeed, 0.0, 1.8);
+        // Monochrome: one grey disc, no chromatic split. Base sits at
+        // 75% white and velocity carries it the rest of the way up
+        float a = smoothstep(0.5, 0.15, length(gl_PointCoord - 0.5));
+        float b = 0.75 + 0.25 * clamp(vSpeed, 0.0, 1.5);
         // Opacity rides velocity too — still dots fade back, moving
         // dots come forward; floor keeps the idle grid readable
         float vo = 0.5 + 0.5 * clamp(vSpeed, 0.0, 1.0);
-        float am = max(ar, max(ag, ab)) * vo;
-        fragColor = vec4(vec3(ar, ag, ab) * b * vo, am);
+        fragColor = vec4(vec3(min(b, 1.0)) * a * vo, a * vo);
       }`;
 
       function compile(type, src) {
@@ -155,7 +151,6 @@
       gl.useProgram(prog);
       const uRes = gl.getUniformLocation(prog, "uRes");
       const uSize = gl.getUniformLocation(prog, "uSize");
-      const uAb = gl.getUniformLocation(prog, "uAb");
 
       const hueFn = `
       vec3 hue2rgb(float h) {
@@ -1190,7 +1185,6 @@
         gl.useProgram(prog);
         gl.uniform2f(uRes, W, H);
         gl.uniform1f(uSize, (3.2 - vm * 1.0) * DPR);
-        gl.uniform1f(uAb, 1 - vm);
         gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
         gl.bufferSubData(gl.ARRAY_BUFFER, 0, pos);
         gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
