@@ -74,53 +74,30 @@
       p {
         font-weight: 400;
       }
-      /* Prefix and wordmark are set against each other: small wide-tracked
-         caps at low value over a large tight lowercase mark at high value.
-         Letter-spacing adds a trailing space after the last glyph, which
-         throws centred text off by half of it — the negative right margin
-         pulls that back so the line is optically centred, not just
-         mathematically. */
-      p.line1 {
-        font-size: clamp(0.68rem, 1.5vw, 0.95rem);
-        letter-spacing: 0.44em;
-        margin-right: -0.44em;
-        text-transform: uppercase;
-        color: rgba(255, 255, 255, 0.34);
-      }
-      /* The stack's own box is exactly line2's box — the prefix and the
-         sup are both taken out of flow, so nothing shifts "zirkle" off
-         the viewport centre horizontally or vertically. */
+      /* Wordmark then a much smaller mark beneath it, both centred in
+         normal flow — nothing is taken out of flow, so the pair centres
+         as one block. Letter-spacing adds a trailing space after the
+         last glyph, which throws centred text off by half of it; the
+         negative right margin pulls that back so the small line is
+         optically centred, not just mathematically. */
       .stack {
-        position: relative;
-      }
-      p.line1 {
-        position: absolute;
-        bottom: 100%;
-        left: 50%;
-        transform: translateX(-50%);
-        margin-bottom: 1.9em;
-        white-space: nowrap;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
       }
       p.line2 {
-        position: relative;
         font-size: clamp(2.6rem, 7.5vw, 5.5rem);
         letter-spacing: -0.015em;
         line-height: 1;
         color: rgba(255, 255, 255, 0.96);
-        /* --glow is driven from the frame loop: the mark burns brighter
-           the deeper the cursor sits in the vortex */
-        text-shadow: 0 0 calc(30px + 90px * var(--glow, 0)) rgba(255, 255, 255, calc(0.05 + 0.4 * var(--glow, 0)));
       }
-      sup {
-        position: absolute;
-        left: 100%;
-        top: 0.18em;
-        margin-left: 0.16em;
-        font-size: 0.24em;
-        font-weight: 400;
-        letter-spacing: 0.14em;
+      p.line3 {
+        font-size: clamp(0.6rem, 1.2vw, 0.78rem);
+        letter-spacing: 0.4em;
+        margin-right: -0.4em;
+        margin-top: 0.9em;
         text-transform: uppercase;
-        color: rgba(255, 255, 255, 0.42);
+        color: rgba(255, 255, 255, 0.38);
       }
     </style>
   </head>
@@ -129,8 +106,8 @@
     <div class="cursor" id="cur"></div>
     <div class="overlay">
       <div class="stack">
-        <p class="line1">We come, full</p>
-        <p class="line2">zirkle<sup id="soon">soon™</sup></p>
+        <p class="line2">zirkle</p>
+        <p class="line3" id="soon">soon™</p>
       </div>
     </div>
 
@@ -807,9 +784,6 @@
 
       // Mouse — canvas-pixel coords
       const cur = document.querySelector("#cur");
-      const overlay = document.querySelector(".overlay");
-      const line2El = document.querySelector(".line2");
-      let glowShown = -1;
       let mx = -1e6,
         my = -1e6,
         mouseOver = false;
@@ -882,14 +856,6 @@
           : 0;
         ccMix += (ccRaw - ccMix) * (1 - Math.exp(-dt * 5));
         const cs = ccMix;
-        // Wordmark burns brighter the deeper the cursor sits. Quantised
-        // to 20 steps so this touches the DOM only when it would show,
-        // not on every frame.
-        const glowQ = Math.round((vm * 0.55 + cs * 0.45) * 20);
-        if (glowQ !== glowShown) {
-          glowShown = glowQ;
-          line2El.style.setProperty("--glow", (glowQ / 20).toFixed(2));
-        }
         // Flat-line gate: near-zero until the last ~10% of the
         // approach to center, then ramps hard — cs^10 stays under
         // 0.35 at cs=0.9, hits 1 only right at dead center
@@ -920,9 +886,6 @@
         // into the vortex core, the shorter each link's life, so the
         // same 80 lines re-fire faster instead of the count growing
         const core = vm * 0.4 + cs * 0.6;
-
-        const glowVal = Math.round(closeness * 60 + vm * 60);
-        overlay.style.textShadow = `0 0 ${glowVal}px rgba(255,255,255,${0.12 + closeness * 0.2 + vm * 0.25})`;
 
         // Spatial hash rebuild
         head.fill(-1);
