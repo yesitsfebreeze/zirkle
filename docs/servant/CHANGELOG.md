@@ -1,5 +1,9 @@
 # CHANGELOG
 
+Decided by: user, 2026-07-31 — overlay font switches to Cardo
+
+- 2026-07-31: font stack Monda → Cardo (verified HTTP 200, serves 400/700 + 400 italic); fallbacks changed sans → Georgia/Times/serif to match. Wordmark letter-spacing -0.015em → 0: the negative tracking was chosen for a sans display face and collides serifs at that size. Font lineage is now TT Bluescreens → Barlow Condensed → Monda → Cardo.
+
 Decided by: user, 2026-07-31 — overlay reduced to the wordmark plus a very small soon™ beneath it, all glow removed
 
 - 2026-07-31: dropped the "We come, full" prefix line entirely. soon™ moves from a trailing absolute superscript to its own centred line below the mark (p.line3, clamp 0.6–0.78rem, 0.4em tracking with a matching negative right margin for optical centring). .stack becomes a plain flex column — nothing is out of flow now, so the pair centres as one block and the absolute-positioning trick from a7dfe56 is no longer needed.
