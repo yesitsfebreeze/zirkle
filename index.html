@@ -253,6 +253,8 @@
         CX = 0,
         CY = 0,
         R = 0,
+        RT = 0, // inner radius: full vortex reached here
+        DEAD_R = 0, // dead band: inside this, everything is pinned at max
         SEP_R = 0,
         SEP_R2 = 0,
         COLL_R = 0;
@@ -590,6 +592,8 @@
             RADIUS_CSS,
             Math.min(canvas.clientWidth, canvas.clientHeight) * 0.42,
           ) * DPR;
+        RT = R * 0.35;
+        DEAD_R = R * 0.06;
         SEP_R = SEP_R_CSS * DPR;
         SEP_R2 = SEP_R * SEP_R;
         COLL_R = COLL_R_CSS * DPR;
@@ -743,7 +747,13 @@
         mx = e.clientX * DPR;
         my = e.clientY * DPR;
         mouseOver = true;
-        cur.style.transform = `translate(${e.clientX - 14}px, ${e.clientY - 14}px)`;
+        // Shrinks on the same RT→DEAD_R ramp the vortex uses, and holds
+        // at its smallest inside the dead band
+        const k = Math.min(
+          1,
+          Math.max(0, (Math.hypot(mx - CX, my - CY) - DEAD_R) / (RT - DEAD_R)),
+        );
+        cur.style.transform = `translate(${e.clientX - 14}px, ${e.clientY - 14}px) scale(${(0.25 + 0.75 * k).toFixed(3)})`;
         cur.style.opacity = "1";
       });
       canvas.addEventListener("mouseleave", () => {
@@ -772,10 +782,11 @@
         last = now;
         const t = now / 1000;
 
-        // Closeness of mouse to screen center drives attraction strength
-        // Floored: a cursor exactly on center is a zero-length radius,
-        // which drives cs to a hard 1 and collapses the grid inward
-        const md = Math.max(0.001, Math.hypot(mx - CX, my - CY));
+        // Closeness of mouse to screen center drives attraction strength.
+        // Floored at the dead band, not at an epsilon: every downstream
+        // term saturates at DEAD_R and simply holds, so pushing further
+        // in cannot drive the field past its maximum and break it
+        const md = Math.max(DEAD_R, Math.hypot(mx - CX, my - CY));
         const maxDist = Math.hypot(W * 0.5, H * 0.5);
         const closeness = mouseOver
           ? Math.min(1, Math.max(0, 1 - md / maxDist))
@@ -783,14 +794,17 @@
         const attract = closeness * closeness;
         // Shape key: grid↔circle is a linear blend scrubbed by cursor
         // distance — 0 at the ring outline, 1 at RT near the center
-        const RT = R * 0.35;
         const vmTarget = mouseOver
           ? Math.min(1, Math.max(0, (R - md) / (R - RT)))
           : 0;
         vortexMix += (vmTarget - vortexMix) * (1 - Math.exp(-dt * 14));
         const vm = vortexMix;
         // Depth toward exact center: tightens and speeds the streams
-        const ccRaw = mouseOver ? Math.min(1, Math.max(0, 1 - md / RT)) : 0;
+        // Remapped onto RT→DEAD_R so cs reaches exactly 1 at the band
+        // edge instead of asymptotically chasing it at md=0
+        const ccRaw = mouseOver
+          ? Math.min(1, Math.max(0, (RT - md) / (RT - DEAD_R)))
+          : 0;
         ccMix += (ccRaw - ccMix) * (1 - Math.exp(-dt * 5));
         const cs = ccMix;
         // Flat-line gate: near-zero until the last ~10% of the

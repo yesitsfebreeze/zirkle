@@ -1,5 +1,9 @@
 # CHANGELOG
 
+Decided by: user, 2026-07-31 — dead band at the centre pins the field at its maximum instead of letting a near-centre cursor drive it past breaking, and the cursor ring shrinks on the same ramp
+
+- 2026-07-31: hoisted RT (R·0.35) and new DEAD_R (R·0.06) onto layout so the frame loop and the cursor handler share them; `md` floor changed from 0.001 to DEAD_R, and ccRaw remapped from `1 - md/RT` to `(RT - md)/(RT - DEAD_R)` so cs reaches exactly 1 at the band edge rather than asymptotically chasing it at md=0. Inside the band vm/cs/csGate are all frozen — verified identical at d=20.4/10/2/0. Cursor ring scales 1.0→0.25 on the same RT→DEAD_R ramp, held at 0.25 inside the band
+
 Decided by: user, 2026-07-31 — click toggles a whole-page invert filter; every dot visible at a 75% opacity floor and defocused in inverse proportion to its velocity
 
 - 2026-07-31: `body.invert { filter: invert(1) }` toggled on canvas click alongside the existing randomize + hue re-roll. Particle shader: opacity floor 0.5→0.75 and brightness folded into one `lift` term (0.75 + 0.25·sharp) so a still dot sits at exactly 0.75 peak alpha; smoothstep inner edge now `mix(0.0, 0.42, sharp)` — at rest the falloff starts at the sprite centre (soft blob), at speed it snaps to a hard-edged disc. Blur spreads energy, so mean sprite alpha runs 0.225 at rest vs 0.848 at full speed even though peak alpha is floored at 0.75
