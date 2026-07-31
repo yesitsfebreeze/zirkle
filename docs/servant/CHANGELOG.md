@@ -1,5 +1,9 @@
 # CHANGELOG
 
+Decided by: user, 2026-07-31 — Conway slower again and no pulsing: cells crossfade linearly over a whole tick instead of snapping, so the grid is never holding a frame
+
+- 2026-07-31: added per-dot lifeMix Float32Array walked linearly at dt/LIFE_STEP_T toward the 0/1 board state — replaces the hard `lifeAlive[i] ? 0.85 : 0` opacity switch that caused the pulse; LIFE_STEP_T 0.55→1.2s, randomize 0.4–0.9→0.9–1.8; link board decoupled onto its own LINK_STEP_T (0.55s, randomize 0.4–0.9) so slowing conway no longer starves link re-pairing
+
 Decided by: user, 2026-07-31 — a link is one solid dot walking its bezier, not a trail: each orb waits its own random delay before departing, Conway ticks ~3.4x slower, and no dot ever falls below 0.5 opacity
 
 - 2026-07-31: bezier trail removed entirely — lineProg/lineVertSrc/lineFragSrc/lineData/lineVbo/BEZ_SEG deleted, orb is the only per-link geometry; orb alpha is flat 1.0 (bell envelope dropped), odd slots still fade out with the vortex; linkAge starts negative (−LINK_DELAY_MAX·rand) so each orb holds before departing; LIFE_STEP_T 0.16→0.55s, randomize range 0.08–0.3→0.4–0.9; particle shader velocity-opacity floor 0.15→0.5

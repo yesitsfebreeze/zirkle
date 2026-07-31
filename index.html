@@ -237,7 +237,8 @@
       // can re-roll them; layout() picks up the new values on rebuild.
       let SPACING = 26; // grid cell size
       let RADIUS_CSS = 340; // vortex circle radius around logo
-      let LIFE_STEP_T = 0.55; // conway tick interval, seconds
+      let LIFE_STEP_T = 1.2; // conway tick interval, seconds
+      let LINK_STEP_T = 0.55; // link board's own tick — not tied to conway
       let LIFE_RINGS = 3; // concentric seed bands
       let SEP_R_CSS = 14; // soft evasion radius
       let COLL_R_CSS = 7; // hard bounce radius
@@ -275,6 +276,7 @@
       let gcols = 0,
         grows = 0,
         lifeAlive = null,
+        lifeMix = null,
         lifeNext = null,
         lifeAcc = 0,
         lifeHashA = -1,
@@ -568,6 +570,7 @@
         N = cols * rows;
         lifeAlive = new Uint8Array(N);
         lifeNext = new Uint8Array(N);
+        lifeMix = new Float32Array(N);
         lifeAliveIdx = new Int32Array(N);
         lifeAliveCount = 0;
         lifeAcc = 0;
@@ -664,7 +667,8 @@
       function randomizeParams() {
         const rnd = (lo, hi) => lo + Math.random() * (hi - lo);
         SPACING = Math.round(rnd(18, 40));
-        LIFE_STEP_T = rnd(0.4, 0.9);
+        LIFE_STEP_T = rnd(0.9, 1.8);
+        LINK_STEP_T = rnd(0.4, 0.9);
         LIFE_RINGS = Math.round(rnd(1, 6));
         SEP_R_CSS = Math.round(rnd(8, 22));
         COLL_R_CSS = Math.round(rnd(4, Math.min(12, SEP_R_CSS - 1)));
@@ -751,6 +755,11 @@
         // Radial Life: ticks independent of render rate, seeded in
         // concentric rings so growth/death reads as pulses from center
         lifeAcc += dt;
+        // Cells crossfade instead of switching: each dot walks its
+        // mix toward the board state at a fixed rate that spans one
+        // whole tick, so something is always in transit and the grid
+        // never lands on a held frame — that hold is what pulsed
+        const lifeRate = dt / LIFE_STEP_T;
         while (lifeAcc >= LIFE_STEP_T) {
           lifeAcc -= LIFE_STEP_T;
           lifeStep();
@@ -760,8 +769,8 @@
         // Separate board, separate clock — decides which points
         // connect, entirely independent of the movement board above
         linkAcc += dt;
-        while (linkAcc >= LIFE_STEP_T) {
-          linkAcc -= LIFE_STEP_T;
+        while (linkAcc >= LINK_STEP_T) {
+          linkAcc -= LINK_STEP_T;
           linkLifeStep();
         }
 
@@ -1009,10 +1018,16 @@
           // Life reads as voids, not blobs: alive cells go dim/empty,
           // dead cells stay the filled grid — migration (above) still
           // walks alive cells outward, so the holes drift radially
+          const lt = lifeAlive[i] ? 1 : 0;
+          const lm = lifeMix[i];
+          lifeMix[i] =
+            lm < lt
+              ? Math.min(lt, lm + lifeRate)
+              : Math.max(lt, lm - lifeRate);
           speedBuf[i] =
             (Math.hypot(nxp - px, nyp - py) / dt) *
             spdNorm *
-            (1 - idleW * (lifeAlive[i] ? 0.85 : 0));
+            (1 - idleW * lifeMix[i] * 0.85);
           pos[i * 2] = nxp;
           pos[i * 2 + 1] = nyp;
         }
