@@ -1,5 +1,10 @@
 # CHANGELOG
 
+Decided by: user, 2026-07-31 — vortex convergence moves back in toward the centre but stops short of it, and "zirkle" is put on the true viewport centre
+
+- 2026-07-31: added VM_INNER = R*0.2 (68px at R=340); vmTarget denominator changes from `VM_OUTER - R` to `VM_OUTER - VM_INNER`, so the circle completes near the middle rather than at the ring radius. VM_INNER sits 3.3x outside DEAD_R and inside RT, so vm still has travel left when cs begins moving — vm now reads 0.60 at the circle radius, 0.93 at RT, 1.00 at 68px.
+- 2026-07-31: overlay restructured — line1 and the sup are both taken out of flow (`position: absolute`) inside a new `.stack` wrapper whose box is therefore exactly line2's box. Previously "soon™" widened the line and pushed "zirkle" left of centre, and the prefix paragraph pushed it below centre; now the word itself lands on the viewport centre in both axes.
+
 Decided by: user, 2026-07-31 — hairline guide lines under the bezier orbs, and the orbs come off dof() entirely (defocus read as mush at that size). Reverses the earlier "dots only, never lines" rule.
 
 - 2026-07-31: new lineProg (gl.LINES) draws each active bezier tessellated into BEZ_SEG=12 segments at LINE_A=0.055 alpha, fading to 0.022 at full vortex — roughly 1:18 to 1:45 against the orb core under additive blend, so it reads as a hint of the path rather than a stroke. lineData sized MAX_LINKS*BEZ_SEG*2*3 floats; verified exact fit with no overflow at the randomize ceiling of 160 links (11519 highest index vs 11520 capacity).

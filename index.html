@@ -78,11 +78,30 @@
         color: rgba(255, 255, 255, 0.4);
         text-shadow: 0 0 80px rgba(255, 255, 255, 0.15);
       }
+      /* The stack's own box is exactly line2's box — the prefix and the
+         sup are both taken out of flow, so nothing shifts "zirkle" off
+         the viewport centre horizontally or vertically. */
+      .stack {
+        position: relative;
+      }
+      p.line1 {
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        margin-bottom: 0.15em;
+        white-space: nowrap;
+      }
       p.line2 {
+        position: relative;
         font-size: clamp(3rem, 9vw, 7rem);
         color: rgba(255, 255, 255, 0.92);
       }
       sup {
+        position: absolute;
+        left: 100%;
+        top: 0.12em;
+        margin-left: 0.12em;
         font-size: 0.3em;
         letter-spacing: 0.04em;
         color: rgba(255, 255, 255, 0.55);
@@ -93,8 +112,10 @@
     <canvas id="c"></canvas>
     <div class="cursor" id="cur"></div>
     <div class="overlay">
-      <p>We come, full</p>
-      <p class="line2">zirkle<sup id="soon">soon™</sup></p>
+      <div class="stack">
+        <p class="line1">We come, full</p>
+        <p class="line2">zirkle<sup id="soon">soon™</sup></p>
+      </div>
     </div>
 
     <script>
@@ -316,6 +337,7 @@
         RT = 0, // depth reference: cs reaches 1 between here and DEAD_R
         DEAD_R = 0, // dead band: inside this, everything is pinned at max
         VM_OUTER = 0, // outer edge of the vortex ramp
+        VM_INNER = 0, // inner edge: vm reaches 1 here
         SEP_R = 0,
         SEP_R2 = 0,
         COLL_R = 0;
@@ -645,7 +667,9 @@
           ) * DPR;
         RT = R * 0.35;
         DEAD_R = R * 0.06;
-        VM_OUTER = R * 2.2; // vortex starts ramping here, complete at R
+        VM_OUTER = R * 2.2; // vortex ramp begins here
+        VM_INNER = R * 0.2; // …and completes here — near the centre, but
+        // clear of the DEAD_R band so there is still travel left at the end
         SEP_R = SEP_R_CSS * DPR;
         SEP_R2 = SEP_R * SEP_R;
         COLL_R = COLL_R_CSS * DPR;
@@ -849,11 +873,14 @@
           : 0;
         const attract = closeness * closeness;
         // Shape key: the collapse point is the circle's own radius, not
-        // the centre — the ramp runs from VM_OUTER inward and the full
-        // fast circle is drawn the moment the cursor reaches R. Going
-        // deeper past that only drives cs, never vm.
+        // the centre — the ramp runs VM_OUTER inward to VM_INNER, so the
+        // circle completes close to the middle without needing the
+        // cursor dead on it. Past VM_INNER only cs keeps moving.
         const vmTarget = mouseOver
-          ? Math.min(1, Math.max(0, (VM_OUTER - md) / (VM_OUTER - R)))
+          ? Math.min(
+              1,
+              Math.max(0, (VM_OUTER - md) / (VM_OUTER - VM_INNER)),
+            )
           : 0;
         vortexMix += (vmTarget - vortexMix) * (1 - Math.exp(-dt * 14));
         const vm = vortexMix;
