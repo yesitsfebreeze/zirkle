@@ -169,28 +169,33 @@
       // link, riding its bezier at the link's own age/life progress
       const orbVertSrc = `#version 300 es
       in vec2 aPos;
-      in float aAlpha;
+      in float aBlur;
       uniform vec2 uRes;
       uniform float uSize;
-      out float vAlpha;
+      out float vBlur;
       void main() {
         vec2 clip = (aPos / uRes) * 2.0 - 1.0;
         gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);
-        gl_PointSize = uSize;
-        vAlpha = aAlpha;
+        // Swells as it lands — the sprite needs the extra pixels for
+        // the softened edge to register as a flash rather than a fade
+        gl_PointSize = uSize * (1.0 + aBlur * 2.4);
+        vBlur = aBlur;
       }`;
       const orbFragSrc = `#version 300 es
       precision highp float;
-      in float vAlpha;
+      in float vBlur;
       out vec4 fragColor;
       void main() {
         float d = length(gl_PointCoord - 0.5);
-        float glow = smoothstep(0.5, 0.0, d);
-        fragColor = vec4(vec3(glow * vAlpha * 1.6), glow * vAlpha);
+        // Falloff spreads from the centre on arrival; normalised so the
+        // bloom softens and widens without dimming the core
+        float e1 = mix(0.0, -0.45, vBlur);
+        float glow = smoothstep(0.5, e1, d) / smoothstep(0.5, e1, 0.0);
+        fragColor = vec4(vec3(glow * 1.6), glow);
       }`;
       const orbProg = gl.createProgram();
       gl.bindAttribLocation(orbProg, 0, "aPos");
-      gl.bindAttribLocation(orbProg, 1, "aAlpha");
+      gl.bindAttribLocation(orbProg, 1, "aBlur");
       gl.attachShader(orbProg, compile(gl.VERTEX_SHADER, orbVertSrc));
       gl.attachShader(orbProg, compile(gl.FRAGMENT_SHADER, orbFragSrc));
       gl.linkProgram(orbProg);
@@ -558,7 +563,7 @@
         linkB = new Int32Array(MAX_LINKS);
         linkAge = new Float32Array(MAX_LINKS);
         linkLife = new Float32Array(MAX_LINKS); // always > 0 — no free/dead slot
-        orbData = new Float32Array(MAX_LINKS * 3); // x,y,alpha per orb
+        orbData = new Float32Array(MAX_LINKS * 3); // x,y,blur per orb
       }
       allocLinkArrays();
 
@@ -1091,13 +1096,13 @@
           const p = linkAge[s] / linkLife[s];
           if (p >= 1) {
             respawnLink(s, core);
+            // Thinning the pool at full vortex is done by making odd
+            // slots wait longer between runs, not by fading them out
+            // mid-flight — every orb now finishes the curve it started
+            if (s & 1) linkAge[s] -= vm * LINK_DELAY_MAX * 2;
             continue;
           }
           if (p < 0) continue; // still inside its random departure delay
-          // Solid dot, no envelope — half the pool (odd slots) drops
-          // out as the vortex engages, the rest stay at full opacity
-          const a = s & 1 ? 1 - vm : 1;
-          if (a <= 0.0015) continue;
           const ia = linkA[s],
             ib = linkB[s];
           const x0 = pos[ia * 2],
@@ -1135,7 +1140,9 @@
           const oo = orbCount * 3;
           orbData[oo] = muO * muO * x0 + 2 * muO * p * cx + p * p * x2;
           orbData[oo + 1] = muO * muO * y0 + 2 * muO * p * cy + p * p * y2;
-          orbData[oo + 2] = a;
+          // Arrival flash: nothing for most of the ride, then a fast
+          // bloom over the last quarter as t approaches its endpoint
+          orbData[oo + 2] = Math.max(0, (p - 0.75) / 0.25);
           orbCount++;
         }
 

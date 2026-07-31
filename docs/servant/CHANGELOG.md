@@ -1,5 +1,10 @@
 # CHANGELOG
 
+Decided by: user, 2026-07-31 — link orbs always finish the curve they started, and blur-flash on arrival
+
+- 2026-07-31: removed the mid-flight vanish — `a = s & 1 ? 1 - vm : 1` with `if (a <= 0.0015) continue` made odd-slot orbs fade to nothing partway along their bezier as the vortex engaged, so half the pool disappeared instead of animating to the end. Pool thinning now happens at respawn instead: odd slots get `linkAge -= vm * LINK_DELAY_MAX * 2` (up to 8s extra wait at full vortex), lowering the duty cycle while every orb still completes its curve.
+- 2026-07-31: arrival flash driven by the bezier t value — orbData's third float switches from alpha to blur, `max(0, (p - 0.75) / 0.25)`, so it is flat for the first three quarters of the ride then blooms. Orb sprite grows `uSize * (1 + aBlur * 2.4)` (7px → 23.8px) and the fragment falloff spreads to `mix(0.0, -0.45, vBlur)`, normalised by its centre value so the bloom widens without dimming the core (verified core alpha holds 1.00 throughout, divisor bounded 0.54–1.00). Attribute 1 renamed aAlpha → aBlur; stride stays 3 floats.
+
 Decided by: user, 2026-07-31 — slow dots genuinely blur (sprite grows so the falloff has room to read), and the full vortex rotates at half speed
 
 - 2026-07-31: gl_PointSize is now velocity-driven — `uSize * mix(2.6, 1.0, sharp)`, so a still dot renders 8.3px against a moving dot's 3.2px. The defocus added in aa32749 was invisible because a 3.2px sprite has no room to spread a soft edge into; widening the smoothstep alone could not fix that. Inner edge also extended to `mix(-0.15, 0.42, sharp)` and the result normalised by `smoothstep(0.5, e1, 0.0)` so the softer falloff does not erode the 75% opacity floor — verified peak alpha is exactly 0.75 at rest and rises to 1.00 at speed, with the divisor bounded 0.86–1.00 so it can never be zero.
