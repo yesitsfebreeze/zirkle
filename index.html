@@ -158,24 +158,28 @@
       const uSize = gl.getUniformLocation(prog, "uSize");
       const uAb = gl.getUniformLocation(prog, "uAb");
 
-      const lineVertSrc = `#version 300 es
-      in vec2 aPos;
-      in float aAlpha;
-      in float aHue;
-      uniform vec2 uRes;
-      out float vAlpha;
-      out float vHue;
-      void main() {
-        vec2 clip = (aPos / uRes) * 2.0 - 1.0;
-        gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);
-        vAlpha = aAlpha;
-        vHue = aHue;
-      }`;
       const hueFn = `
       vec3 hue2rgb(float h) {
         vec3 k = vec3(1.0, 2.0/3.0, 1.0/3.0);
         vec3 p = abs(fract(h + k) * 6.0 - 3.0);
         return clamp(p - 1.0, 0.0, 1.0);
+      }`;
+      // Thinking-link trail — point sprites tracing the bezier, never
+      // a connected stroke: everything on screen is a dot
+      const lineVertSrc = `#version 300 es
+      in vec2 aPos;
+      in float aAlpha;
+      in float aHue;
+      uniform vec2 uRes;
+      uniform float uSize;
+      out float vAlpha;
+      out float vHue;
+      void main() {
+        vec2 clip = (aPos / uRes) * 2.0 - 1.0;
+        gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);
+        gl_PointSize = uSize;
+        vAlpha = aAlpha;
+        vHue = aHue;
       }`;
       const lineFragSrc = `#version 300 es
       precision highp float;
@@ -183,7 +187,11 @@
       in float vHue;
       out vec4 fragColor;
       ${hueFn}
-      void main() { fragColor = vec4(hue2rgb(vHue) * vAlpha, vAlpha); }`;
+      void main() {
+        float d = length(gl_PointCoord - 0.5);
+        float glow = smoothstep(0.5, 0.0, d);
+        fragColor = vec4(hue2rgb(vHue) * glow * vAlpha, glow * vAlpha);
+      }`;
       const lineProg = gl.createProgram();
       gl.bindAttribLocation(lineProg, 0, "aPos");
       gl.bindAttribLocation(lineProg, 1, "aAlpha");
@@ -192,6 +200,7 @@
       gl.attachShader(lineProg, compile(gl.FRAGMENT_SHADER, lineFragSrc));
       gl.linkProgram(lineProg);
       const uResL = gl.getUniformLocation(lineProg, "uRes");
+      const uSizeL = gl.getUniformLocation(lineProg, "uSize");
 
       // Orbs — one glowing point per active link, riding its bezier
       // at the link's own age/life progress, same hue as the line
@@ -547,7 +556,7 @@
       let MAX_LINKS = 80; // fixed count, always active — frequency varies, count doesn't
       let linkA, linkB, linkAge, linkLife, linkHue, lineData, orbData;
       // Quadratic bezier per link, elbowed at a grid-axis corner —
-      // tessellated into straight segments for gl.LINES
+      // tessellated into a trail of point sprites, never a stroke
       const BEZ_SEG = 10;
       const lineVbo = gl.createBuffer();
       function allocLinkArrays() {
@@ -556,7 +565,7 @@
         linkAge = new Float32Array(MAX_LINKS);
         linkLife = new Float32Array(MAX_LINKS); // always > 0 — no free/dead slot
         linkHue = new Float32Array(MAX_LINKS);
-        lineData = new Float32Array(MAX_LINKS * BEZ_SEG * 2 * 4); // x,y,alpha,hue per vertex
+        lineData = new Float32Array(MAX_LINKS * (BEZ_SEG + 1) * 4); // x,y,alpha,hue per dot
         orbData = new Float32Array(MAX_LINKS * 4); // x,y,alpha,hue per orb
       }
       allocLinkArrays();
@@ -1089,11 +1098,14 @@
           orbData[oo + 3] = hue;
           orbCount++;
 
-          let px = x0,
-            py = y0;
-          // Every other tessellation segment fades out as the vortex
-          // engages — solid curve at idle, dotted/dashed on the closed
-          // circle, continuous in between
+          const o0 = lineVerts * 4;
+          lineData[o0] = x0;
+          lineData[o0 + 1] = y0;
+          lineData[o0 + 2] = a;
+          lineData[o0 + 3] = hue;
+          lineVerts++;
+          // Every other dot fades out as the vortex engages — solid
+          // trail at idle, sparser dots on the closed circle
           for (let t = 1; t <= BEZ_SEG; t++) {
             const u = t / BEZ_SEG,
               mu = 1 - u;
@@ -1101,17 +1113,11 @@
             const by = mu * mu * y0 + 2 * mu * u * cy + u * u * y2;
             const segA = t & 1 ? a * (1 - vm) : a;
             const o = lineVerts * 4;
-            lineData[o] = px;
-            lineData[o + 1] = py;
+            lineData[o] = bx;
+            lineData[o + 1] = by;
             lineData[o + 2] = segA;
             lineData[o + 3] = hue;
-            lineData[o + 4] = bx;
-            lineData[o + 5] = by;
-            lineData[o + 6] = segA;
-            lineData[o + 7] = hue;
-            lineVerts += 2;
-            px = bx;
-            py = by;
+            lineVerts++;
           }
         }
 
@@ -1134,10 +1140,11 @@
         if (lineVerts > 0) {
           gl.useProgram(lineProg);
           gl.uniform2f(uResL, W, H);
+          gl.uniform1f(uSizeL, 3 * DPR);
           gl.bindBuffer(gl.ARRAY_BUFFER, lineVbo);
           gl.bufferData(
             gl.ARRAY_BUFFER,
-            lineData.subarray(0, lineVerts * 3),
+            lineData.subarray(0, lineVerts * 4),
             gl.DYNAMIC_DRAW,
           );
           gl.enableVertexAttribArray(0);
@@ -1146,7 +1153,7 @@
           gl.vertexAttribPointer(1, 1, gl.FLOAT, false, 16, 8);
           gl.enableVertexAttribArray(2);
           gl.vertexAttribPointer(2, 1, gl.FLOAT, false, 16, 12);
-          gl.drawArrays(gl.LINES, 0, lineVerts);
+          gl.drawArrays(gl.POINTS, 0, lineVerts);
         }
 
         if (orbCount > 0) {
