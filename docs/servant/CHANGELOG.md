@@ -1,5 +1,9 @@
 # CHANGELOG
 
+Decided by: user, 2026-07-31 — click toggles a whole-page invert filter; every dot visible at a 75% opacity floor and defocused in inverse proportion to its velocity
+
+- 2026-07-31: `body.invert { filter: invert(1) }` toggled on canvas click alongside the existing randomize + hue re-roll. Particle shader: opacity floor 0.5→0.75 and brightness folded into one `lift` term (0.75 + 0.25·sharp) so a still dot sits at exactly 0.75 peak alpha; smoothstep inner edge now `mix(0.0, 0.42, sharp)` — at rest the falloff starts at the sprite centre (soft blob), at speed it snaps to a hard-edged disc. Blur spreads energy, so mean sprite alpha runs 0.225 at rest vs 0.848 at full speed even though peak alpha is floored at 0.75
+
 Decided by: user, 2026-07-31 — grid dots go monochrome: 75% white base, no chromatic split
 
 - 2026-07-31: particle fragment shader collapsed from three offset RGB lobes to a single grey disc — the neon came from chromatic aberration, not a colour uniform; base `b` 0.3+0.8·vSpeed → 0.75+0.25·vSpeed clamped to 1, so a still dot is 75% white and motion carries it to full. uAb uniform and its getUniformLocation/uniform1f plumbing deleted. Link orbs and soon™ keep the global accent hue (explicit earlier request, left untouched)

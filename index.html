@@ -24,6 +24,10 @@
         background: #0a0a0a;
         cursor: none;
       }
+      /* Click toggles the whole composited page, canvas included */
+      body.invert {
+        filter: invert(1);
+      }
       canvas {
         position: fixed;
         top: 0;
@@ -124,14 +128,15 @@
       in float vSpeed;
       out vec4 fragColor;
       void main() {
-        // Monochrome: one grey disc, no chromatic split. Base sits at
-        // 75% white and velocity carries it the rest of the way up
-        float a = smoothstep(0.5, 0.15, length(gl_PointCoord - 0.5));
-        float b = 0.75 + 0.25 * clamp(vSpeed, 0.0, 1.5);
-        // Opacity rides velocity too — still dots fade back, moving
-        // dots come forward; floor keeps the idle grid readable
-        float vo = 0.5 + 0.5 * clamp(vSpeed, 0.0, 1.0);
-        fragColor = vec4(vec3(min(b, 1.0)) * a * vo, a * vo);
+        float sharp = clamp(vSpeed, 0.0, 1.0);
+        // Defocus at rest: the falloff starts at the sprite centre so a
+        // still dot is a soft blob, and tightens to a hard edge as the
+        // dot picks up speed
+        float a = smoothstep(0.5, mix(0.0, 0.42, sharp), length(gl_PointCoord - 0.5));
+        // Monochrome, and every dot visible: 75% floor on both
+        // brightness and opacity, velocity carries them to full
+        float lift = 0.75 + 0.25 * sharp;
+        fragColor = vec4(vec3(lift) * a * lift, a * lift);
       }`;
 
       function compile(type, src) {
@@ -717,6 +722,7 @@
       canvas.addEventListener("click", () => {
         randomizeParams();
         rollGlobalHue();
+        document.body.classList.toggle("invert");
         // Force-reflow flash: disable transition, snap to white,
         // reflow, re-enable — guarantees two separate paints
         // instead of two rAF writes coalescing into one
