@@ -260,6 +260,9 @@
         vel,
         homeX,
         homeY,
+        homeTX, // migration target — homeX glides toward it, never jumps
+        homeTY,
+        homeDur, // per-dot glide duration multiplier, so arrivals scatter
         dirn,
         jit,
         phase,
@@ -375,10 +378,13 @@
             cellDot[nk] = dA;
             dotCell[dA] = nk;
             dotCell[dB] = k;
-            homeX[dA] = cellPosX[nk];
-            homeY[dA] = cellPosY[nk];
-            homeX[dB] = cellPosX[k];
-            homeY[dB] = cellPosY[k];
+            // Targets only: a teleport here would spike every migrating
+            // dot's velocity on the same tick, and opacity rides
+            // velocity — that shared spike is what read as a pulse
+            homeTX[dA] = cellPosX[nk];
+            homeTY[dA] = cellPosY[nk];
+            homeTX[dB] = cellPosX[k];
+            homeTY[dB] = cellPosY[k];
             lifeSeen[k] = 1;
             lifeSeen[nk] = 1;
           }
@@ -613,6 +619,9 @@
         vel = new Float32Array(N * 2);
         homeX = new Float32Array(N);
         homeY = new Float32Array(N);
+        homeTX = new Float32Array(N);
+        homeTY = new Float32Array(N);
+        homeDur = new Float32Array(N);
         dirn = new Float32Array(N);
         jit = new Float32Array(N);
         phase = new Float32Array(N);
@@ -631,6 +640,9 @@
             const k = j * cols + i;
             homeX[k] = (i + 0.5) * cw;
             homeY[k] = (j + 0.5) * ch;
+            homeTX[k] = homeX[k];
+            homeTY[k] = homeY[k];
+            homeDur[k] = 0.6 + Math.random() * 1.6;
             cellPosX[k] = homeX[k];
             cellPosY[k] = homeY[k];
             dotCell[k] = k;
@@ -919,6 +931,9 @@
         const damp = Math.exp(-dt * dampRate);
         const vmax = (300 + attract * 700 + vm * (1900 + cs * 900)) * DPR;
         const spdNorm = 1 / ((200 + vm * 700) * DPR);
+        // One cell-diagonal per generation is the nominal glide speed;
+        // homeDur stretches or compresses it per dot
+        const homeBase = Math.hypot(cellW, cellH) / LIFE_STEP_T;
         for (let i = 0; i < N; i++) {
           const px = pos[i * 2],
             py = pos[i * 2 + 1];
@@ -942,6 +957,18 @@
           ang[i] += wAng * dt;
           const ca = Math.cos(ang[i]),
             sa = Math.sin(ang[i]);
+
+          // Walk the home slot toward its migration target at a fixed
+          // per-dot speed — constant rate, no arrival burst, and each
+          // dot takes its own time so migrations never land in unison
+          const hdx = homeTX[i] - homeX[i],
+            hdy = homeTY[i] - homeY[i];
+          const hdd = Math.hypot(hdx, hdy);
+          if (hdd > 1e-4) {
+            const f = Math.min(1, (dt * homeBase) / (homeDur[i] * hdd));
+            homeX[i] += hdx * f;
+            homeY[i] += hdy * f;
+          }
 
           // Shape-key target — linear lerp grid↔ring
           let tgx = homeX[i] + (CX + ca * tr - homeX[i]) * vm;

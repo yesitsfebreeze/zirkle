@@ -1,5 +1,9 @@
 # CHANGELOG
 
+Decided by: user, 2026-07-31 — residual pulse traced to lifeMigrate teleporting home slots on the tick boundary; migration now glides per-dot at its own rate
+
+- 2026-07-31: lifeMigrate writes homeTX/homeTY targets instead of assigning homeX/homeY — homeX walks toward the target at Math.hypot(cellW,cellH)/LIFE_STEP_T scaled by a per-dot homeDur (0.6–2.2), clamped so it never overshoots. The teleport moved a full cell diagonal in one frame (~2206px/s) for every migrating dot at the same instant, and the shader's opacity rides velocity, so the whole grid flashed together each generation; glide peak is 14–51px/s spread over 0.6–2.2 generations with per-dot scatter
+
 Decided by: user, 2026-07-31 — conway comes off the timer entirely: generations are pre-recorded onto a tape and played back one step behind the leading edge, so cells interpolate toward a known future instead of chasing a board that flips under them
 
 - 2026-07-31: LIFE_TAPE=5 ring of Uint8Array generations replaces lifeAlive/lifeNext swap; primeLifeTape() records 4 generations up front, advanceLifeTape() reuses the slot the playhead vacates to record a new leading-edge gen (lookahead stays constant, ring never grows); playhead lifePlay slides dt/LIFE_STEP_T and dots lerp lifeTape[cur]→lifeTape[cur+1] — lifeMix chase, lifeAcc, lifeStep, lifeAliveIdx/Count, seedRadialLife all deleted; stagnation reseed now lands on the leading edge, 4 generations before it is visible
