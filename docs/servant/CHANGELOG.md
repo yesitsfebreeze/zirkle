@@ -1,5 +1,12 @@
 # CHANGELOG
 
+Decided by: user, 2026-07-31 — full-history reconcile across all 10 sessions (258 user messages, oldest→newest); two genuine gaps closed, one flagged as superseded
+
+- 2026-07-31: audited every instruction in the project's whole message history against the code. 39/39 surviving feature requirements verified present; 7 deliberately-removed subsystems (FBO recursion, mirrored mini-ring, 3D shapes, spark stragglers, chromatic aberration, hue/colour, gaussian dof) confirmed absent.
+- 2026-07-31: GAP CLOSED — font. Requests ran TT Bluescreens → Barlow Condensed → Monda; Monda was the newest and had never been applied. Swapped the Google Fonts link and stack to Monda (verified HTTP 200, serves 400–700), and p font-weight 300→400 since Monda has no 300.
+- 2026-07-31: GAP CLOSED — logo glow. "increase the box shadow of the circle logo, like it glows a bit more, the closer we get" was only ever a static text-shadow, and that was dropped entirely in a512ea9's typography reset. Now driven from the frame loop: `--glow` = vm*0.55 + cs*0.45, quantised to 20 steps so the DOM is touched only when the change would be visible; text-shadow blur 30→120px and alpha 0.05→0.45 across the range.
+- 2026-07-31: GAP FLAGGED, not implemented — "transform the solid Bezier lines to dotted Bezier lines when we are on the closed circle". Guide lines currently fade with vm instead. Superseded in spirit by the much newer "very thin, very faint lines" instruction; left alone pending a call.
+
 Decided by: user, 2026-07-31 — constant 2x2px dots, whole page simplified for low-end hardware, typography reset, and the one overlooked request from this session implemented
 
 - 2026-07-31: DOT_PX = 2 — every point sprite is a constant 2 CSS px. This RETIRES the entire dof()/gaussian/grain model (dofFn, dofSize, hash12, DOF_* constants, uT/uTO uniforms, aBlur/vBlur varyings all deleted): a 2px sprite has no room for a circle of confusion. Explicitly supersedes the earlier velocity-blur and depth-of-field requests — brightness is now the only channel that varies. Fragment fill drops from 1.09M to 0.026M per frame (42x) and each fragment goes from length+mix+2 exp+divide+hash to one clamp and one madd. All three fragment stages moved highp → mediump.

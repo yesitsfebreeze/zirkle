@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Monda:wght@400..700&display=swap"
       rel="stylesheet"
     />
     <style>
@@ -65,14 +65,14 @@
         pointer-events: none;
         z-index: 10;
         font-family:
-          "Barlow Condensed",
+          "Monda",
           -apple-system,
           BlinkMacSystemFont,
           "Segoe UI",
           sans-serif;
       }
       p {
-        font-weight: 300;
+        font-weight: 400;
       }
       /* Prefix and wordmark are set against each other: small wide-tracked
          caps at low value over a large tight lowercase mark at high value.
@@ -107,6 +107,9 @@
         letter-spacing: -0.015em;
         line-height: 1;
         color: rgba(255, 255, 255, 0.96);
+        /* --glow is driven from the frame loop: the mark burns brighter
+           the deeper the cursor sits in the vortex */
+        text-shadow: 0 0 calc(30px + 90px * var(--glow, 0)) rgba(255, 255, 255, calc(0.05 + 0.4 * var(--glow, 0)));
       }
       sup {
         position: absolute;
@@ -806,6 +809,8 @@
       // Mouse — canvas-pixel coords
       const cur = document.querySelector("#cur");
       const overlay = document.querySelector(".overlay");
+      const line2El = document.querySelector(".line2");
+      let glowShown = -1;
       let mx = -1e6,
         my = -1e6,
         mouseOver = false;
@@ -878,6 +883,14 @@
           : 0;
         ccMix += (ccRaw - ccMix) * (1 - Math.exp(-dt * 5));
         const cs = ccMix;
+        // Wordmark burns brighter the deeper the cursor sits. Quantised
+        // to 20 steps so this touches the DOM only when it would show,
+        // not on every frame.
+        const glowQ = Math.round((vm * 0.55 + cs * 0.45) * 20);
+        if (glowQ !== glowShown) {
+          glowShown = glowQ;
+          line2El.style.setProperty("--glow", (glowQ / 20).toFixed(2));
+        }
         // Flat-line gate: near-zero until the last ~10% of the
         // approach to center, then ramps hard — cs^10 stays under
         // 0.35 at cs=0.9, hits 1 only right at dead center
