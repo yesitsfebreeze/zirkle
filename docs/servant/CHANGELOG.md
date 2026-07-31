@@ -1,5 +1,9 @@
 # CHANGELOG
 
+Decided by: user, 2026-07-31 — root cause of the near-centre collapse: the radial pin was a positional correction with gain 8.5, which overshoots instead of converging
+
+- 2026-07-31: radial pin gain clamped to 1 — `corr = (tr - rl) * min(1, csGate*8.5*(vm-0.5)/0.5)`. As a positional correction any gain above 1 throws the dot past its target radius and further out each frame (measured: 7.5x growth per frame, divergence in ~10 frames from a dot 5px off centre); at 1 it is an exact lerp onto tr and cannot diverge. Latent since the term was written but masked — csGate previously peaked near 0.006 close to centre, so effective gain was ~0.05; the DEAD_R remap in 3c87283 let csGate reach 1 and exposed it. Audited the other position writes: arrival ka is 1-exp(-dt·rate) so bounded below 1, de-overlap push maxes at 0.25, and velocity is clamped to vmax — the pin was the only unbounded one
+
 Decided by: user, 2026-07-31 — page is fully monochrome; click inverts everything (supersedes the global accent hue introduced earlier today)
 
 - 2026-07-31: removed the last colour — hueFn/hue2rgb, globalHue, rollGlobalHue, linkHue and the aHue/vHue orb varying all deleted; orbs render white (`vec3(glow * vAlpha * 1.6)`) and orbData stride drops 4→3 floats (vertexAttribPointer stride 16→12, attribute 2 no longer bound or enabled anywhere). soon™ sup gets a static rgba(255,255,255,0.55) and loses its colour transition. Click handler keeps randomizeParams + the body.invert toggle

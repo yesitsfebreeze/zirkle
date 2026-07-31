@@ -1069,7 +1069,12 @@
             const rrx = nxp - CX,
               rry = nyp - CY;
             const rl = Math.hypot(rrx, rry) + 1e-3;
-            const corr = ((tr - rl) * csGate * 8.5 * (vm - 0.5)) / 0.5;
+            // Gain is clamped to 1: this is a positional correction, so
+            // anything above 1 throws the dot past the target radius and
+            // further out every frame. At 1 it is an exact lerp onto tr
+            // and the pin cannot diverge no matter how deep the cursor
+            const g = Math.min(1, (csGate * 8.5 * (vm - 0.5)) / 0.5);
+            const corr = (tr - rl) * g;
             nxp += (rrx / rl) * corr;
             nyp += (rry / rl) * corr;
           }
