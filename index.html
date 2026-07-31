@@ -374,7 +374,9 @@
             linkA[slot] = i;
             linkB[slot] = j;
             linkAge[slot] = 0;
-            linkLife[slot] = (1.2 + Math.random() * 1.4) * (1 - core * 0.92);
+            // 2.5x longer life — the orb rides its bezier at p=age/life,
+            // so a longer life is directly a slower, calmer glide
+            linkLife[slot] = (3.0 + Math.random() * 3.5) * (1 - core * 0.92);
             linkHue[slot] = Math.random();
             return;
           }
@@ -700,12 +702,11 @@
       }
       canvas.addEventListener("click", () => {
         randomizeParams();
-        // Force-reflow flash: disable transition, snap to a random
-        // hue, reflow, re-enable — guarantees two separate paints
+        // Force-reflow flash: disable transition, snap to white,
+        // reflow, re-enable — guarantees two separate paints
         // instead of two rAF writes coalescing into one
-        const hue = (Math.random() * 360) | 0;
         cur.style.transition = "opacity 0.2s";
-        cur.style.background = `hsla(${hue}, 90%, 65%, 0.95)`;
+        cur.style.background = "rgba(255, 255, 255, 0.95)";
         void cur.offsetHeight;
         cur.style.transition = "opacity 0.2s, background-color 0.6s ease-out";
         cur.style.background = "rgba(255, 255, 255, 0)";
