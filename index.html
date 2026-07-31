@@ -72,11 +72,20 @@
           sans-serif;
       }
       p {
-        font-size: clamp(1.2rem, 3vw, 2rem);
         font-weight: 300;
-        letter-spacing: 0.08em;
-        color: rgba(255, 255, 255, 0.4);
-        text-shadow: 0 0 80px rgba(255, 255, 255, 0.15);
+      }
+      /* Prefix and wordmark are set against each other: small wide-tracked
+         caps at low value over a large tight lowercase mark at high value.
+         Letter-spacing adds a trailing space after the last glyph, which
+         throws centred text off by half of it — the negative right margin
+         pulls that back so the line is optically centred, not just
+         mathematically. */
+      p.line1 {
+        font-size: clamp(0.68rem, 1.5vw, 0.95rem);
+        letter-spacing: 0.44em;
+        margin-right: -0.44em;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.34);
       }
       /* The stack's own box is exactly line2's box — the prefix and the
          sup are both taken out of flow, so nothing shifts "zirkle" off
@@ -89,22 +98,26 @@
         bottom: 100%;
         left: 50%;
         transform: translateX(-50%);
-        margin-bottom: 0.15em;
+        margin-bottom: 1.9em;
         white-space: nowrap;
       }
       p.line2 {
         position: relative;
-        font-size: clamp(3rem, 9vw, 7rem);
-        color: rgba(255, 255, 255, 0.92);
+        font-size: clamp(2.6rem, 7.5vw, 5.5rem);
+        letter-spacing: -0.015em;
+        line-height: 1;
+        color: rgba(255, 255, 255, 0.96);
       }
       sup {
         position: absolute;
         left: 100%;
-        top: 0.12em;
-        margin-left: 0.12em;
-        font-size: 0.3em;
-        letter-spacing: 0.04em;
-        color: rgba(255, 255, 255, 0.55);
+        top: 0.18em;
+        margin-left: 0.16em;
+        font-size: 0.24em;
+        font-weight: 400;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.42);
       }
     </style>
   </head>
@@ -131,37 +144,11 @@
 
       const DPR = Math.min(window.devicePixelRatio || 1, 3);
 
-      // THE defocus model — one implementation, one set of constants,
-      // shared by every blurred thing on the page. Anything that blurs
-      // takes a single 0..1 amount and calls dofSize/dof; there is no
-      // second blur curve anywhere. A true gaussian circle of confusion,
-      // shifted so it reaches zero exactly at the sprite edge and
-      // rescaled so the peak stays 1 — spreading never dims the centre.
-      // Grain rides the same amount, so defocus always brings noise.
-      const dofFn = `
-      const float DOF_SIGMA_SHARP = 0.085;
-      const float DOF_SIGMA_BLUR = 0.30;
-      const float DOF_GRAIN = 0.55;
-      const float DOF_GROW = 4.6;
-
-      float dofSize(float blur) {
-        return mix(1.0, DOF_GROW, blur);
-      }
-      float hash12(vec2 p) {
-        vec3 p3 = fract(vec3(p.xyx) * 0.1031);
-        p3 += dot(p3, p3.yzx + 33.33);
-        return fract((p3.x + p3.y) * p3.z);
-      }
-      float dof(float d, float blur, vec2 seed) {
-        float sigma = mix(DOF_SIGMA_SHARP, DOF_SIGMA_BLUR, blur);
-        float s2 = 2.0 * sigma * sigma;
-        float g = exp(-d * d / s2);
-        float edge = exp(-0.25 / s2);
-        g = max(0.0, (g - edge) / (1.0 - edge));
-        float n = hash12(seed);
-        float grain = DOF_GRAIN * blur;
-        return g * (1.0 - grain + grain * n);
-      }`;
+      // DOT_PX — every point sprite on the page is this many CSS px,
+      // always. Constant size means no per-dot size math, no gl_PointCoord
+      // work in the fragment stage, and a fixed 4-fragment fill cost per
+      // dot. Brightness is the only channel that varies.
+      const DOT_PX = 2;
 
       const vertSrc = `#version 300 es
       in vec2 aPos;
@@ -169,34 +156,25 @@
       uniform vec2 uRes;
       uniform float uSize;
       out float vSpeed;
-      ${dofFn}
       void main() {
-        vec2 clip = (aPos / uRes) * 2.0 - 1.0;
-        gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);
-        // A dot blurs as it slows: blur is just 1 - speed
-        gl_PointSize = uSize * dofSize(1.0 - clamp(aSpeed, 0.0, 1.0));
+        gl_Position = vec4(
+          (aPos.x / uRes.x) * 2.0 - 1.0,
+          1.0 - (aPos.y / uRes.y) * 2.0,
+          0.0, 1.0
+        );
+        gl_PointSize = uSize;
         vSpeed = aSpeed;
       }`;
 
       const fragSrc = `#version 300 es
-      precision highp float;
+      precision mediump float;
       in float vSpeed;
-      uniform float uT;
       out vec4 fragColor;
-      ${dofFn}
       void main() {
-        float sharp = clamp(vSpeed, 0.0, 1.0);
-        // Depth of field: a still dot is a wide, grainy circle of
-        // confusion; speed pulls it back to a tight clean point
-        float a = dof(
-          length(gl_PointCoord - 0.5),
-          1.0 - sharp,
-          gl_FragCoord.xy + uT
-        );
-        // Monochrome, and every dot visible: 75% floor on both
-        // brightness and opacity, velocity carries them to full
-        float lift = 0.75 + 0.25 * sharp;
-        fragColor = vec4(vec3(lift) * a * lift, a * lift);
+        // Flat fill — at 2px a shaped sprite is only mush. Every dot is
+        // visible at a 0.75 floor; velocity carries it to full white.
+        float a = 0.75 + 0.25 * clamp(vSpeed, 0.0, 1.0);
+        fragColor = vec4(vec3(a), a);
       }`;
 
       function compile(type, src) {
@@ -216,7 +194,6 @@
       gl.useProgram(prog);
       const uRes = gl.getUniformLocation(prog, "uRes");
       const uSize = gl.getUniformLocation(prog, "uSize");
-      const uT = gl.getUniformLocation(prog, "uT");
 
       // Bezier guide line — hairline, barely there: it exists only to
       // show where an orb is headed, so it must never compete with the
@@ -232,7 +209,7 @@
         vAlpha = aAlpha;
       }`;
       const lineFragSrc = `#version 300 es
-      precision highp float;
+      precision mediump float;
       in float vAlpha;
       out vec4 fragColor;
       void main() {
@@ -247,40 +224,40 @@
       const uResL = gl.getUniformLocation(lineProg, "uRes");
       const lineVbo = gl.createBuffer();
 
-      // Orbs — the dot riding each bezier. Deliberately NOT routed
-      // through dof(): defocus reads as mush at this size, so the orb
-      // stays a crisp point and signals arrival by swelling instead
+      // Orbs — the dot riding each bezier. Same constant sprite as every
+      // other dot; arrival is signalled by brightness alone, so nothing
+      // here varies per-vertex except one float.
       const orbVertSrc = `#version 300 es
       in vec2 aPos;
-      in float aBlur;
+      in float aFlash;
       uniform vec2 uRes;
       uniform float uSize;
-      out float vBlur;
+      out float vFlash;
       void main() {
-        vec2 clip = (aPos / uRes) * 2.0 - 1.0;
-        gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);
-        gl_PointSize = uSize * (1.0 + aBlur * 0.9);
-        vBlur = aBlur;
+        gl_Position = vec4(
+          (aPos.x / uRes.x) * 2.0 - 1.0,
+          1.0 - (aPos.y / uRes.y) * 2.0,
+          0.0, 1.0
+        );
+        gl_PointSize = uSize;
+        vFlash = aFlash;
       }`;
       const orbFragSrc = `#version 300 es
-      precision highp float;
-      in float vBlur;
+      precision mediump float;
+      in float vFlash;
       out vec4 fragColor;
       void main() {
-        float d = length(gl_PointCoord - 0.5);
-        float glow = smoothstep(0.5, 0.12, d);
-        float lift = 1.0 + vBlur * 0.8;
-        fragColor = vec4(vec3(glow * 1.6 * lift), glow);
+        float a = 1.0 + vFlash * 1.4;
+        fragColor = vec4(vec3(a), 1.0);
       }`;
       const orbProg = gl.createProgram();
       gl.bindAttribLocation(orbProg, 0, "aPos");
-      gl.bindAttribLocation(orbProg, 1, "aBlur");
+      gl.bindAttribLocation(orbProg, 1, "aFlash");
       gl.attachShader(orbProg, compile(gl.VERTEX_SHADER, orbVertSrc));
       gl.attachShader(orbProg, compile(gl.FRAGMENT_SHADER, orbFragSrc));
       gl.linkProgram(orbProg);
       const uResO = gl.getUniformLocation(orbProg, "uRes");
       const uSizeO = gl.getUniformLocation(orbProg, "uSize");
-      const uTO = gl.getUniformLocation(orbProg, "uT");
       const orbVbo = gl.createBuffer();
 
       // Fade pass — translucent background quad instead of a hard
@@ -324,6 +301,10 @@
       // How much of the morph the outermost dots get to themselves
       // before the innermost ones start — 0 = all dots in lockstep
       const MORPH_SPREAD = 0.5;
+      // Each dot reverses on its own clock, never in step with its
+      // neighbours — the interval is re-rolled on every flip
+      const FLIP_MIN = 3.0;
+      const FLIP_MAX = 14.0;
       let LIFE_RINGS = 3; // concentric seed bands
       let SEP_R_CSS = 14; // soft evasion radius
       let COLL_R_CSS = 7; // hard bounce radius
@@ -359,7 +340,9 @@
         ang,
         accX,
         accY,
-        speedBuf;
+        speedBuf,
+        trBuf, // per-dot ring radius, carried from the vm>0 block to the pin
+        flipT; // per-dot countdown to its next direction change
       // The wanderer — a single point roaming the grid, its influence
       // propagating outward through the lattice
 
@@ -715,6 +698,8 @@
         accX = new Float32Array(N);
         accY = new Float32Array(N);
         speedBuf = new Float32Array(N);
+        trBuf = new Float32Array(N);
+        flipT = new Float32Array(N);
         const cw = W / cols,
           ch = H / rows;
         cellW = cw;
@@ -767,6 +752,7 @@
           // every slot's neighbours running opposite, the ring stays
           // uniformly populated at every bearing.
           dirn[order[r]] = r & 1 ? 1 : -1;
+          flipT[order[r]] = FLIP_MIN + Math.random() * (FLIP_MAX - FLIP_MIN);
         }
 
         allocLinkArrays();
@@ -1042,58 +1028,69 @@
           let fx = accX[i],
             fy = accY[i];
 
-          // Ring slot: fixed bearing per dot, spinning at stream speed
-          // scaled by vm — half morphed means half swirl speed
-          // Two interleaving rotations: each stream rides a slow
-          // counter-rotating radial wave — they drift toward and away
-          // from each other, braiding smoothly instead of clumping
-          const wv = Math.sin(
-            ang[i] * 3.0 + t * dirn[i] * 1.7 + phase[i] * 0.2,
-          );
-          // Streamline toward the end state: the braid noise collapses
-          // as the vortex completes — fully engaged and centered, the
-          // streams merge into one thin clean circle
-          const tight = 1 - vm * (0.7 + cs * 0.29);
-          const tr = R + ((dirn[i] * 3 + wv * 16) * DPR + jit[i] * 0.3) * tight;
-          const wAng = (dirn[i] * tspd[i] * spinS * vm) / tr;
-          ang[i] += wAng * dt;
-          const ca = Math.cos(ang[i]),
-            sa = Math.sin(ang[i]);
+          // Own clock, own reversal — re-rolled each time so the pool
+          // never drifts back into a shared rhythm
+          flipT[i] -= dt;
+          if (flipT[i] <= 0) {
+            dirn[i] = -dirn[i];
+            flipT[i] = FLIP_MIN + Math.random() * (FLIP_MAX - FLIP_MIN);
+          }
 
           // Walk the home slot toward its migration target at a fixed
           // per-dot speed — constant rate, no arrival burst, and each
-          // dot takes its own time so migrations never land in unison
+          // dot takes its own time so migrations never land in unison.
+          // Squared compare first: the sqrt only runs for dots actually
+          // in transit, which is a small minority of the grid.
           const hdx = homeTX[i] - homeX[i],
             hdy = homeTY[i] - homeY[i];
-          const hdd = Math.sqrt(hdx * hdx + hdy * hdy);
-          if (hdd > 1e-4) {
+          const hd2 = hdx * hdx + hdy * hdy;
+          if (hd2 > 1e-8) {
+            const hdd = Math.sqrt(hd2);
             const f = Math.min(1, (dt * homeBase) / (homeDur[i] * hdd));
             homeX[i] += hdx * f;
             homeY[i] += hdy * f;
           }
 
-          // Shape-key target — linear lerp grid↔ring, but on a per-dot
-          // clock: outer dots run ahead, inner dots start late, both
-          // still land exactly at vm=1 so the end state is unchanged
-          const vmi = Math.min(
-            1,
-            Math.max(
-              0,
-              (vm - (1 - morphLead[i]) * MORPH_SPREAD) / (1 - MORPH_SPREAD),
-            ),
-          );
-          let tgx = homeX[i] + (CX + ca * tr - homeX[i]) * vmi;
-          let tgy = homeY[i] + (CY + sa * tr - homeY[i]) * vmi;
+          let tgx = homeX[i],
+            tgy = homeY[i];
 
-          // Track the moving slot: match its tangential velocity so the
-          // stream carries no lag at full vortex
+          // Everything below is ring geometry — three trig calls per dot.
+          // With the vortex disengaged none of it reaches the output, so
+          // the whole block is skipped and the idle grid costs nothing.
           if (vm > 0.001) {
+            // Each stream rides a slow counter-rotating radial wave, so
+            // they braid instead of clumping; the braid collapses as the
+            // vortex completes and the streams merge into one thin circle
+            const wv = Math.sin(
+              ang[i] * 3.0 + t * dirn[i] * 1.7 + phase[i] * 0.2,
+            );
+            const tight = 1 - vm * (0.7 + cs * 0.29);
+            const tr =
+              R + ((dirn[i] * 3 + wv * 16) * DPR + jit[i] * 0.3) * tight;
+            const wAng = (dirn[i] * tspd[i] * spinS * vm) / tr;
+            ang[i] += wAng * dt;
+            const ca = Math.cos(ang[i]),
+              sa = Math.sin(ang[i]);
+
+            // Shape-key target on a per-dot clock: outer dots run ahead,
+            // inner dots start late, both land exactly at vm=1
+            const vmi = Math.min(
+              1,
+              Math.max(
+                0,
+                (vm - (1 - morphLead[i]) * MORPH_SPREAD) / (1 - MORPH_SPREAD),
+              ),
+            );
+            tgx += (CX + ca * tr - tgx) * vmi;
+            tgy += (CY + sa * tr - tgy) * vmi;
+            trBuf[i] = tr;
+
+            // Match the slot's tangential velocity so the stream carries
+            // no lag, plus centripetal feedforward: circular tracking
+            // otherwise lags outward by a_c/rate² (≈15px)
             const sv = tspd[i] * spinS * dirn[i] * vm;
             fx += (-sa * sv - vel[i * 2]) * 18 * vm;
             fy += (ca * sv - vel[i * 2 + 1]) * 18 * vm;
-            // Centripetal feedforward: circular tracking otherwise lags
-            // outward by a_c/rate² (≈15px) — supply v²/r exactly so the
-            // dot holds the target radius instead of bulging past it
             const cf = wAng * wAng * tr;
             fx -= ca * cf;
             fy -= sa * cf;
@@ -1156,6 +1153,7 @@
             // Outliers are pulled on their radius error, not just on
             // depth: a dot far off the line gets the strong correction
             // immediately instead of waiting for csGate to ramp
+            const tr = trBuf[i];
             const err = Math.min(1, Math.abs(tr - rl) / (R * 0.25));
             const g = Math.min(
               1,
@@ -1294,8 +1292,7 @@
         if (orbCount > 0) {
           gl.useProgram(orbProg);
           gl.uniform2f(uResO, W, H);
-          gl.uniform1f(uSizeO, 7 * DPR);
-          gl.uniform1f(uTO, (t * 60.0) % 1024.0);
+          gl.uniform1f(uSizeO, DOT_PX * DPR);
           gl.bindBuffer(gl.ARRAY_BUFFER, orbVbo);
           gl.bufferData(
             gl.ARRAY_BUFFER,
@@ -1311,8 +1308,7 @@
 
         gl.useProgram(prog);
         gl.uniform2f(uRes, W, H);
-        gl.uniform1f(uSize, (3.2 - vm * 1.0) * DPR);
-        gl.uniform1f(uT, (t * 60.0) % 1024.0);
+        gl.uniform1f(uSize, DOT_PX * DPR);
         gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
         gl.bufferSubData(gl.ARRAY_BUFFER, 0, pos);
         gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
