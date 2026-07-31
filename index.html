@@ -239,6 +239,7 @@
       let RADIUS_CSS = 340; // vortex circle radius around logo
       let LIFE_STEP_T = 1.2; // conway tick interval, seconds
       let LINK_STEP_T = 0.55; // link board's own tick — not tied to conway
+      const LIFE_TAPE = 5; // recorded generations held ahead of playback
       let LIFE_RINGS = 3; // concentric seed bands
       let SEP_R_CSS = 14; // soft evasion radius
       let COLL_R_CSS = 7; // hard bounce radius
@@ -275,15 +276,14 @@
       // Grid geometry
       let gcols = 0,
         grows = 0,
-        lifeAlive = null,
-        lifeMix = null,
-        lifeNext = null,
-        lifeAcc = 0,
+        lifeAlive = null, // alias: the tape slot currently on screen
+        lifeTape = null, // ring of pre-recorded generations
+        tapeCur = 0, // slot being displayed
+        tapeHead = 0, // newest recorded slot
+        lifePlay = 0, // 0→1 position between tapeCur and the next slot
         lifeHashA = -1,
         lifeHashB = -1,
         lifeStale = 0,
-        lifeAliveIdx = null,
-        lifeAliveCount = 0,
         linkAlive = null,
         linkNext = null,
         linkAcc = 0,
@@ -414,9 +414,6 @@
           }
         }
       }
-      function seedRadialLife() {
-        seedRadialBoard(lifeAlive);
-      }
 
       // Standard B3/S23 Life, toroidal wrap, 8-neighbor Moore — shared
       // step primitive, writes into `next` and returns nothing (caller
@@ -443,23 +440,20 @@
         }
       }
 
-      function lifeStep() {
-        conwayStep(lifeAlive, lifeNext);
-        const tmp = lifeAlive;
-        lifeAlive = lifeNext;
-        lifeNext = tmp;
-
+      // Record one generation into `dst`, plus the stagnation watch.
+      // Runs on the tape's leading edge, LIFE_TAPE - 1 steps ahead of
+      // what is on screen, so a reseed lands long before it is seen.
+      function recordLifeGen(dst, src) {
+        conwayStep(src, dst);
         let pop = 0,
           hash = 0;
-        lifeAliveCount = 0;
-        for (let k = 0; k < lifeAlive.length; k++) {
-          if (lifeAlive[k]) {
-            lifeAliveIdx[lifeAliveCount++] = k;
+        for (let k = 0; k < dst.length; k++) {
+          if (dst[k]) {
             pop++;
             hash = (hash * 31 + k) | 0;
           }
         }
-        if (pop < lifeAlive.length * 0.04 || hash === lifeHashB) {
+        if (pop < dst.length * 0.04 || hash === lifeHashB) {
           lifeStale++;
         } else {
           lifeStale = 0;
@@ -467,11 +461,38 @@
         lifeHashB = lifeHashA;
         lifeHashA = hash;
         if (lifeStale > 8) {
-          seedRadialLife();
+          seedRadialBoard(dst);
           lifeStale = 0;
           lifeHashA = -1;
           lifeHashB = -1;
         }
+      }
+
+      // Fill the tape from a fresh seed: slot 0 is generation 0, then
+      // LIFE_TAPE-1 generations are computed up front so playback has a
+      // future to interpolate toward from the very first frame
+      function primeLifeTape() {
+        seedRadialBoard(lifeTape[0]);
+        for (let t = 1; t < LIFE_TAPE; t++) {
+          conwayStep(lifeTape[t - 1], lifeTape[t]);
+        }
+        tapeCur = 0;
+        tapeHead = LIFE_TAPE - 1;
+        lifePlay = 0;
+        lifeAlive = lifeTape[0];
+      }
+
+      // Step the playhead one generation. The slot it vacates is the
+      // oldest board, so it is immediately reused to record a new one
+      // at the leading edge — the ring never grows and the lookahead
+      // stays exactly LIFE_TAPE-1 generations.
+      function advanceLifeTape() {
+        const vacated = tapeCur;
+        tapeCur = (tapeCur + 1) % LIFE_TAPE;
+        lifeAlive = lifeTape[tapeCur];
+        lifeMigrate();
+        recordLifeGen(lifeTape[vacated], lifeTape[tapeHead]);
+        tapeHead = vacated;
       }
 
       // Independent board driving ONLY which points connect — own
@@ -568,12 +589,8 @@
         gcols = cols;
         grows = rows;
         N = cols * rows;
-        lifeAlive = new Uint8Array(N);
-        lifeNext = new Uint8Array(N);
-        lifeMix = new Float32Array(N);
-        lifeAliveIdx = new Int32Array(N);
-        lifeAliveCount = 0;
-        lifeAcc = 0;
+        lifeTape = [];
+        for (let t = 0; t < LIFE_TAPE; t++) lifeTape.push(new Uint8Array(N));
         lifeStale = 0;
         lifeHashA = -1;
         lifeHashB = -1;
@@ -590,7 +607,7 @@
         dotCell = new Int32Array(N);
         cellDot = new Int32Array(N);
         lifeSeen = new Uint8Array(N);
-        seedRadialLife();
+        primeLifeTape();
         seedRadialBoard(linkAlive);
         pos = new Float32Array(N * 2);
         vel = new Float32Array(N * 2);
@@ -754,19 +771,18 @@
         // 0.35 at cs=0.9, hits 1 only right at dead center
         const csGate = cs * cs * cs * cs * cs * cs * cs * cs * cs * cs;
 
-        // Radial Life: ticks independent of render rate, seeded in
-        // concentric rings so growth/death reads as pulses from center
-        lifeAcc += dt;
-        // Cells crossfade instead of switching: each dot walks its
-        // mix toward the board state at a fixed rate that spans one
-        // whole tick, so something is always in transit and the grid
-        // never lands on a held frame — that hold is what pulsed
-        const lifeRate = dt / LIFE_STEP_T;
-        while (lifeAcc >= LIFE_STEP_T) {
-          lifeAcc -= LIFE_STEP_T;
-          lifeStep();
-          lifeMigrate();
+        // Radial Life plays back off the tape rather than ticking:
+        // the playhead slides linearly and every dot interpolates
+        // toward a generation that is already recorded, so the board
+        // is always in motion one step behind the leading edge
+        lifePlay += dt / LIFE_STEP_T;
+        while (lifePlay >= 1) {
+          lifePlay -= 1;
+          advanceLifeTape();
         }
+        const lifeFrom = lifeTape[tapeCur];
+        const lifeTo = lifeTape[(tapeCur + 1) % LIFE_TAPE];
+        const lifeF = lifePlay;
 
         // Separate board, separate clock — decides which points
         // connect, entirely independent of the movement board above
@@ -1020,16 +1036,11 @@
           // Life reads as voids, not blobs: alive cells go dim/empty,
           // dead cells stay the filled grid — migration (above) still
           // walks alive cells outward, so the holes drift radially
-          const lt = lifeAlive[i] ? 1 : 0;
-          const lm = lifeMix[i];
-          lifeMix[i] =
-            lm < lt
-              ? Math.min(lt, lm + lifeRate)
-              : Math.max(lt, lm - lifeRate);
+          const lv = lifeFrom[i] + (lifeTo[i] - lifeFrom[i]) * lifeF;
           speedBuf[i] =
             (Math.hypot(nxp - px, nyp - py) / dt) *
             spdNorm *
-            (1 - idleW * lifeMix[i] * 0.85);
+            (1 - idleW * lv * 0.85);
           pos[i * 2] = nxp;
           pos[i * 2 + 1] = nyp;
         }

@@ -1,5 +1,9 @@
 # CHANGELOG
 
+Decided by: user, 2026-07-31 — conway comes off the timer entirely: generations are pre-recorded onto a tape and played back one step behind the leading edge, so cells interpolate toward a known future instead of chasing a board that flips under them
+
+- 2026-07-31: LIFE_TAPE=5 ring of Uint8Array generations replaces lifeAlive/lifeNext swap; primeLifeTape() records 4 generations up front, advanceLifeTape() reuses the slot the playhead vacates to record a new leading-edge gen (lookahead stays constant, ring never grows); playhead lifePlay slides dt/LIFE_STEP_T and dots lerp lifeTape[cur]→lifeTape[cur+1] — lifeMix chase, lifeAcc, lifeStep, lifeAliveIdx/Count, seedRadialLife all deleted; stagnation reseed now lands on the leading edge, 4 generations before it is visible
+
 Decided by: user, 2026-07-31 — cursor-to-center distance gets a 0.001 floor so a dead-center cursor can never collapse the grid
 
 - 2026-07-31: `md` (mouse→center distance) wrapped in Math.max(0.001, …) — the only unguarded center radius; every other one (rr, rE, r, rl) already carried a +1e-3 epsilon
