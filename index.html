@@ -135,8 +135,11 @@
         float ag = smoothstep(0.5, 0.15, length(p));
         float ab = smoothstep(0.5, 0.15, length(p + off));
         float b = 0.3 + 0.8 * clamp(vSpeed, 0.0, 1.8);
-        float am = max(ar, max(ag, ab));
-        fragColor = vec4(vec3(ar, ag, ab) * b, am);
+        // Opacity rides velocity too — still dots fade back, moving
+        // dots come forward; floor keeps the idle grid readable
+        float vo = 0.15 + 0.85 * clamp(vSpeed, 0.0, 1.0);
+        float am = max(ar, max(ag, ab)) * vo;
+        fragColor = vec4(vec3(ar, ag, ab) * b * vo, am);
       }`;
 
       function compile(type, src) {

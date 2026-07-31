@@ -1,5 +1,8 @@
 # CHANGELOG
 
+Decided by: user, 2026-07-31 — dot opacity scales with velocity: still dots recede, motion carries the eye
+
+- 2026-07-31: particle fragment shader alpha × (0.15 + 0.85·clamp(vSpeed)) — opacity rides velocity with a floor so the idle grid stays readable
 Decided by: user, 2026-07-31 — cursor flash is always white (color belongs to the bezier dots alone), and link dots glide 2.5x slower so trails stop smearing into line-like streaks
 
 - 2026-07-31: cursor click flash back to white (random hue stays on thinking-link dots only); linkLife 1.2–2.6s → 3.0–6.5s — orb rides p=age/life so longer life = slower glide, kills the ghost-trail line smear
