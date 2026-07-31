@@ -1,5 +1,8 @@
 # CHANGELOG
 
+Decided by: user, 2026-07-31 — slogan replaces the big title: "We come, full / zirkle(soon™)", soon™ superscript; one global accent hue shared by link dots and soon™, re-rolled per click (recovered from a compacted prior session)
+
+- 2026-07-31: h1 removed, two-line slogan with sup soon™; global hue (rollGlobalHue) replaces per-link random hue — click re-rolls it, fills linkHue, recolors soon™
 Decided by: user, 2026-07-31 — dot opacity scales with velocity: still dots recede, motion carries the eye
 
 - 2026-07-31: particle fragment shader alpha × (0.15 + 0.85·clamp(vSpeed)) — opacity rides velocity with a floor so the idle grid stays readable

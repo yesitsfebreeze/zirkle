@@ -67,24 +67,21 @@
           "Segoe UI",
           sans-serif;
       }
-      h1 {
-        font-size: clamp(3rem, 10vw, 8rem);
-        font-weight: 300;
-        letter-spacing: 0.06em;
-        color: rgba(255, 255, 255, 0.92);
-        text-shadow: 0 0 80px rgba(255, 255, 255, 0.15);
-        margin-bottom: 0.25em;
-      }
       p {
-        font-size: clamp(0.85rem, 2vw, 1.4rem);
+        font-size: clamp(1.4rem, 4vw, 2.8rem);
         font-weight: 300;
         letter-spacing: 0.08em;
-        color: rgba(255, 255, 255, 0.45);
+        color: rgba(255, 255, 255, 0.92);
+        text-shadow: 0 0 80px rgba(255, 255, 255, 0.15);
       }
-      p.soon {
-        font-size: clamp(0.7rem, 1.5vw, 1.1rem);
-        color: rgba(200, 200, 200, 0.28);
-        margin-top: 0.5em;
+      p.line2 {
+        align-self: center;
+        padding-left: 2em;
+      }
+      sup {
+        font-size: 0.45em;
+        letter-spacing: 0.04em;
+        transition: color 0.6s ease-out;
       }
     </style>
   </head>
@@ -92,9 +89,8 @@
     <canvas id="c"></canvas>
     <div class="cursor" id="cur"></div>
     <div class="overlay">
-      <h1>zirkle</h1>
-      <p>we come full zirkle</p>
-      <p class="soon">soon™</p>
+      <p>We come, full</p>
+      <p class="line2">zirkle<sup id="soon">(soon™)</sup></p>
     </div>
 
     <script>
@@ -380,7 +376,7 @@
             // 2.5x longer life — the orb rides its bezier at p=age/life,
             // so a longer life is directly a slower, calmer glide
             linkLife[slot] = (3.0 + Math.random() * 3.5) * (1 - core * 0.92);
-            linkHue[slot] = Math.random();
+            linkHue[slot] = globalHue;
             return;
           }
         }
@@ -557,6 +553,17 @@
       const vbo = gl.createBuffer();
       const speedVbo = gl.createBuffer();
 
+      // One global accent color — every link dot and the soon™ sup
+      // share it; a click re-rolls it everywhere at once
+      let globalHue = Math.random();
+      const soonEl = document.getElementById("soon");
+      function rollGlobalHue() {
+        globalHue = Math.random();
+        if (linkHue) linkHue.fill(globalHue);
+        soonEl.style.color = `hsla(${globalHue * 360}, 90%, 65%, 0.85)`;
+      }
+      rollGlobalHue();
+
       // Thinking links — random pairs flash a line, then ease out fast
       let MAX_LINKS = 80; // fixed count, always active — frequency varies, count doesn't
       let linkA, linkB, linkAge, linkLife, linkHue, lineData, orbData;
@@ -705,6 +712,7 @@
       }
       canvas.addEventListener("click", () => {
         randomizeParams();
+        rollGlobalHue();
         // Force-reflow flash: disable transition, snap to white,
         // reflow, re-enable — guarantees two separate paints
         // instead of two rAF writes coalescing into one
