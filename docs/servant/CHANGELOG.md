@@ -1,5 +1,11 @@
 # CHANGELOG
 
+Decided by: user, 2026-07-31 — the dots draw the wordmark; the DOM text becomes a barely-visible ghost they assemble onto
+
+- 2026-07-31: buildGlyphTargets() rasterises the live overlay text to an offscreen canvas and samples lit pixels (alpha>100) on a stride of max(2, round(3*DPR)) as per-dot targets. It measures the DOM with getBoundingClientRect + getComputedStyle rather than recomputing the CSS clamps, so the dot glyphs land exactly on the faint text through any reflow, font swap or resize; the canvas x is shifted by -letterSpacing/2 to mirror the negative-margin trick the DOM uses for optical centring. Re-run on resize and on document.fonts.ready, since the first paint would otherwise sample the fallback face.
+- 2026-07-31: recruitment is a Fisher-Yates shuffle over dot indices, so the text assembles out of the whole field rather than peeling off one region, and is capped at 34% of N — measured 4–34% recruited across viewport/SPACING/DPR combinations, so the ring always keeps a clear majority. Draft strength `tm` rides cs, so the wordmark forms over the innermost approach and is complete in the dead band.
+- 2026-07-31: tm also backs off every competing ring force on a recruited dot — tangential slot tracking, centripetal feedforward and the radial pin are all scaled by (1-tm) — so the ring and the wordmark never fight over the same dot. The glyph lerp is applied last and outside the vm block, so it wins over whichever target (grid slot or ring slot) the dot otherwise had. Wordmark alpha 0.96→0.055, soon™ 0.38→0.05.
+
 Decided by: user, 2026-07-31 — split the overlay across two faces: Cardo for the wordmark, Monda retained for soon™
 
 - 2026-07-31: both families now load in a single Google Fonts request (verified HTTP 200, serves Cardo and Monda). .overlay keeps Cardo/Georgia/serif; p.line3 overrides to Monda/sans, so the small mark reverts to the face it had before 26177b2. Serif wordmark against sans small caps is the intended pairing. Font lineage: TT Bluescreens → Barlow Condensed → Monda → Cardo for the wordmark only, with Monda retained for soon™.

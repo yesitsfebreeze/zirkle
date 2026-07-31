@@ -86,7 +86,9 @@
            sans display face collides the serifs, so this sits neutral */
         letter-spacing: 0;
         line-height: 1;
-        color: rgba(255, 255, 255, 0.96);
+        /* Barely there: the real wordmark is drawn by the dots. This is
+           the ghost they assemble onto. */
+        color: rgba(255, 255, 255, 0.055);
       }
       p.line3 {
         /* Sans against the serif wordmark — the pairing is the point */
@@ -96,7 +98,7 @@
         margin-right: -0.4em;
         margin-top: 0.9em;
         text-transform: uppercase;
-        color: rgba(255, 255, 255, 0.38);
+        color: rgba(255, 255, 255, 0.05);
       }
     </style>
   </head>
@@ -320,7 +322,10 @@
         accY,
         speedBuf,
         trBuf, // per-dot ring radius, carried from the vm>0 block to the pin
-        flipT; // per-dot countdown to its next direction change
+        flipT, // per-dot countdown to its next direction change
+        glyphOn, // 1 if this dot is recruited into the wordmark
+        glyphX,
+        glyphY;
       // The wanderer — a single point roaming the grid, its influence
       // propagating outward through the lattice
 
@@ -678,6 +683,9 @@
         speedBuf = new Float32Array(N);
         trBuf = new Float32Array(N);
         flipT = new Float32Array(N);
+        glyphOn = new Uint8Array(N);
+        glyphX = new Float32Array(N);
+        glyphY = new Float32Array(N);
         const cw = W / cols,
           ch = H / rows;
         cellW = cw;
@@ -751,8 +759,85 @@
         gl.enableVertexAttribArray(1);
         gl.vertexAttribPointer(1, 1, gl.FLOAT, false, 0, 0);
       }
+      // Rasterise the overlay text once per layout and hand the lit
+      // pixels out as per-dot targets. Measuring the live DOM rather
+      // than recomputing the CSS clamps means the dot glyphs land
+      // exactly on the faint text no matter how it reflows.
+      const line2El = document.querySelector(".line2");
+      const line3El = document.querySelector(".line3");
+      function buildGlyphTargets() {
+        if (!glyphOn) return;
+        glyphOn.fill(0);
+        const oc = document.createElement("canvas");
+        oc.width = W;
+        oc.height = H;
+        const g = oc.getContext("2d", { willReadFrequently: true });
+        g.fillStyle = "#fff";
+        g.textAlign = "center";
+        g.textBaseline = "middle";
+        for (const el of [line2El, line3El]) {
+          if (!el) continue;
+          const r = el.getBoundingClientRect();
+          if (!r.width) continue;
+          const st = getComputedStyle(el);
+          g.font = `${st.fontWeight} ${parseFloat(st.fontSize) * DPR}px ${st.fontFamily}`;
+          const ls = (parseFloat(st.letterSpacing) || 0) * DPR;
+          try {
+            g.letterSpacing = `${ls}px`;
+          } catch {}
+          const txt =
+            st.textTransform === "uppercase"
+              ? el.textContent.toUpperCase()
+              : el.textContent;
+          // Canvas centres including the trailing letter-space; the DOM
+          // cancels it with a negative margin, so shift to match
+          g.fillText(
+            txt,
+            (r.left + r.width / 2) * DPR - ls / 2,
+            (r.top + r.height / 2) * DPR,
+          );
+        }
+        const px = g.getImageData(0, 0, W, H).data;
+        const step = Math.max(2, Math.round(3 * DPR));
+        const pts = [];
+        for (let y = 0; y < H; y += step)
+          for (let x = 0; x < W; x += step)
+            if (px[(y * W + x) * 4 + 3] > 100) pts.push(x, y);
+        const avail = pts.length >> 1;
+        if (!avail) return;
+        // Cap the draft so the ring keeps most of its population
+        const want = Math.min(avail, Math.floor(N * 0.34));
+        // Fisher-Yates over dot indices: which dots get recruited is
+        // random, so the text assembles out of the field rather than
+        // peeling off one region of it
+        const order = new Int32Array(N);
+        for (let i = 0; i < N; i++) order[i] = i;
+        for (let i = N - 1; i > 0; i--) {
+          const j = (Math.random() * (i + 1)) | 0;
+          const t = order[i];
+          order[i] = order[j];
+          order[j] = t;
+        }
+        const stride = avail / want;
+        for (let k = 0; k < want; k++) {
+          const p = ((k * stride) | 0) * 2;
+          const d = order[k];
+          glyphOn[d] = 1;
+          glyphX[d] = pts[p];
+          glyphY[d] = pts[p + 1];
+        }
+      }
+
       layout();
-      window.addEventListener("resize", layout);
+      buildGlyphTargets();
+      // Webfonts land after first paint; the first rasterisation would
+      // otherwise sample the fallback face
+      if (document.fonts && document.fonts.ready)
+        document.fonts.ready.then(buildGlyphTargets);
+      window.addEventListener("resize", () => {
+        layout();
+        buildGlyphTargets();
+      });
 
       // Randomize button — re-rolls every tunable and rebuilds the
       // grid/link pools via layout(), for playing with the parameters
@@ -855,6 +940,10 @@
           : 0;
         ccMix += (ccRaw - ccMix) * (1 - Math.exp(-dt * 5));
         const cs = ccMix;
+        // Wordmark draft: rides the same depth ramp as cs, so the text
+        // assembles over the innermost approach and is fully formed in
+        // the dead band
+        const textMix = cs;
         // Flat-line gate: near-zero until the last ~10% of the
         // approach to center, then ramps hard — cs^10 stays under
         // 0.35 at cs=0.9, hits 1 only right at dead center
@@ -1028,6 +1117,11 @@
           let tgx = homeX[i],
             tgy = homeY[i];
 
+          // Recruited dots peel off the ring and fill the wordmark as
+          // the cursor reaches the middle. tm also backs off every ring
+          // force below, so the two targets never fight over the dot.
+          const tm = glyphOn[i] ? textMix : 0;
+
           // Everything below is ring geometry — three trig calls per dot.
           // With the vortex disengaged none of it reaches the output, so
           // the whole block is skipped and the idle grid costs nothing.
@@ -1062,12 +1156,20 @@
             // Match the slot's tangential velocity so the stream carries
             // no lag, plus centripetal feedforward: circular tracking
             // otherwise lags outward by a_c/rate² (≈15px)
+            const ringW = 1 - tm;
             const sv = tspd[i] * spinS * dirn[i] * vm;
-            fx += (-sa * sv - vel[i * 2]) * 18 * vm;
-            fy += (ca * sv - vel[i * 2 + 1]) * 18 * vm;
-            const cf = wAng * wAng * tr;
+            fx += (-sa * sv - vel[i * 2]) * 18 * vm * ringW;
+            fy += (ca * sv - vel[i * 2 + 1]) * 18 * vm * ringW;
+            const cf = wAng * wAng * tr * ringW;
             fx -= ca * cf;
             fy -= sa * cf;
+          }
+
+          // Applied last and outside the ring block: whatever target the
+          // dot had — grid slot or ring slot — the wordmark wins it
+          if (tm > 0.001) {
+            tgx += (glyphX[i] - tgx) * tm;
+            tgy += (glyphY[i] - tgy) * tm;
           }
 
           // Mouse gravity — stronger the closer the mouse is to center
@@ -1129,10 +1231,9 @@
             // immediately instead of waiting for csGate to ramp
             const tr = trBuf[i];
             const err = Math.min(1, Math.abs(tr - rl) / (R * 0.25));
-            const g = Math.min(
-              1,
-              ((csGate * 8.5 + err * 3.0) * (vm - 0.5)) / 0.5,
-            );
+            const g =
+              Math.min(1, ((csGate * 8.5 + err * 3.0) * (vm - 0.5)) / 0.5) *
+              (1 - tm);
             const corr = (tr - rl) * g;
             nxp += (rrx / rl) * corr;
             nyp += (rry / rl) * corr;
