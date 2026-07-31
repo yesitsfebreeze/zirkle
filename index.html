@@ -79,6 +79,10 @@
         display: flex;
         flex-direction: column;
         align-items: center;
+        /* Driven from the frame loop: solid in the grid scene, gone by
+           the time the dots have taken the wordmark over. Pure white
+           means body.invert renders it pure black for free. */
+        opacity: var(--textfade, 1);
       }
       p.line2 {
         font-size: clamp(2.6rem, 7.5vw, 5.5rem);
@@ -86,9 +90,7 @@
            sans display face collides the serifs, so this sits neutral */
         letter-spacing: 0;
         line-height: 1;
-        /* Barely there: the real wordmark is drawn by the dots. This is
-           the ghost they assemble onto. */
-        color: rgba(255, 255, 255, 0.055);
+        color: #fff;
       }
       p.line3 {
         /* Sans against the serif wordmark — the pairing is the point */
@@ -102,7 +104,7 @@
         margin-right: -0.4em;
         margin-top: 0.9em;
         text-transform: uppercase;
-        color: rgba(255, 255, 255, 0.05);
+        color: #fff;
       }
     </style>
   </head>
@@ -133,7 +135,7 @@
       // always. Constant size means no per-dot size math, no gl_PointCoord
       // work in the fragment stage, and a fixed 4-fragment fill cost per
       // dot. Brightness is the only channel that varies.
-      const DOT_PX = 2;
+      const DOT_PX = 4;
 
       const vertSrc = `#version 300 es
       in vec2 aPos;
@@ -634,8 +636,8 @@
             RADIUS_CSS,
             Math.min(canvas.clientWidth, canvas.clientHeight) * 0.42,
           ) * DPR;
-        RT = R * 0.35;
-        DEAD_R = R * 0.06;
+        RT = R * 0.55;
+        DEAD_R = R * 0.18;
         VM_OUTER = R * 2.2; // vortex ramp begins here
         VM_INNER = R * 0.2; // …and completes here — near the centre, but
         // clear of the DEAD_R band so there is still travel left at the end
@@ -768,6 +770,8 @@
       // exactly on the faint text no matter how it reflows.
       const line2El = document.querySelector(".line2");
       const line3El = document.querySelector(".line3");
+      const stackEl = document.querySelector(".stack");
+      let fadeShown = -1;
       function buildGlyphTargets() {
         if (!glyphOn) return;
         glyphOn.fill(0);
@@ -801,7 +805,7 @@
           );
         }
         const px = g.getImageData(0, 0, W, H).data;
-        const step = Math.max(2, Math.round(3 * DPR));
+        const step = Math.max(1, Math.round(1.6 * DPR));
         const pts = [];
         for (let y = 0; y < H; y += step)
           for (let x = 0; x < W; x += step)
@@ -809,7 +813,7 @@
         const avail = pts.length >> 1;
         if (!avail) return;
         // Cap the draft so the ring keeps most of its population
-        const want = Math.min(avail, Math.floor(N * 0.34));
+        const want = Math.min(avail, Math.floor(N * 0.48));
         // Fisher-Yates over dot indices: which dots get recruited is
         // random, so the text assembles out of the field rather than
         // peeling off one region of it
@@ -944,6 +948,14 @@
         // assembles over the innermost approach and is fully formed in
         // the dead band
         const textMix = cs;
+        // Ghost text hands over to the dots: solid on the grid, fully
+        // transparent once they hold the shape. Quantised to 25 steps
+        // so the DOM is touched only when it would actually show.
+        const fadeQ = Math.round((1 - textMix) * 25);
+        if (fadeQ !== fadeShown) {
+          fadeShown = fadeQ;
+          stackEl.style.setProperty("--textfade", (fadeQ / 25).toFixed(2));
+        }
         // Flat-line gate: near-zero until the last ~10% of the
         // approach to center, then ramps hard — cs^10 stays under
         // 0.35 at cs=0.9, hits 1 only right at dead center

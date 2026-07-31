@@ -1,5 +1,12 @@
 # CHANGELOG
 
+Decided by: user, 2026-07-31 — ghost text goes solid and hands over to the dots earlier, dots double in size, logo sampled at higher resolution
+
+- 2026-07-31: overlay text colour → pure #fff on both lines. No JS is needed for the inverted scene: body.invert's filter turns pure white into pure black for free. Opacity is now driven from the frame loop as `--textfade` = 1 - textMix on .stack, quantised to 25 steps — solid in the grid scene, fully transparent by the time the dots hold the shape.
+- 2026-07-31: dead zone widened — RT R*0.35 → R*0.55 and DEAD_R R*0.06 → R*0.18 (119→187px and 20→61px at R=340). The logo starts forming 1.6x sooner and is frozen complete across a 3x wider band. Checked DEAD_R (61px) still sits inside VM_INNER (68px), so vm continues to reach 1.00 and the ring still completes.
+- 2026-07-31: DOT_PX 2 → 4. Fill per dot 4 → 16 fragments, still only 0.05M per frame at 3108 dots.
+- 2026-07-31: logo resolution — glyph sampling stride max(2, 3*DPR) → max(1, 1.6*DPR), giving 2.3x more sample points at DPR 1 and 4.0x at DPR 2; recruitment cap 34% → 48% of the field (1056 → 1491 dots at N=3108).
+
 Decided by: user, 2026-07-31 — the dots draw the wordmark; the DOM text becomes a barely-visible ghost they assemble onto
 
 - 2026-07-31: buildGlyphTargets() rasterises the live overlay text to an offscreen canvas and samples lit pixels (alpha>100) on a stride of max(2, round(3*DPR)) as per-dot targets. It measures the DOM with getBoundingClientRect + getComputedStyle rather than recomputing the CSS clamps, so the dot glyphs land exactly on the faint text through any reflow, font swap or resize; the canvas x is shifted by -letterSpacing/2 to mirror the negative-margin trick the DOM uses for optical centring. Re-run on resize and on document.fonts.ready, since the first paint would otherwise sample the fallback face.
