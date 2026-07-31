@@ -6,6 +6,7 @@
 - **Flat-line snap** — last 10% of cursor approach to center gates a 10x radial-pin force (cs^10), ring goes razor-thin only right at dead center
 - **Colored links + riding orbs** — each thinking-link gets a random hue on respawn; a glowing point-sprite rides its bezier at the link's own age/life progress
 - **Dots only, never lines** — thinking-link bezier is a trail of point sprites (gl.POINTS), not a connected stroke
+- **Life as voids** — Conway alive cells render dim/empty against the filled grid, radial migration drifts the holes outward instead of bright blobs
 - **Particle ring** — 6000 dots drawn as WebGL2 point sprites, additive glow
 - **Counter-rotation** — parity-split CW/CCW orbital streams
 - **Boids flocking** — separation, alignment, arrival spring via spatial hash

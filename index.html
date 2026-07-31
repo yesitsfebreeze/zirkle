@@ -1032,10 +1032,13 @@
             nxp += (rrx / rl) * corr;
             nyp += (rry / rl) * corr;
           }
+          // Life reads as voids, not blobs: alive cells go dim/empty,
+          // dead cells stay the filled grid — migration (above) still
+          // walks alive cells outward, so the holes drift radially
           speedBuf[i] =
             (Math.hypot(nxp - px, nyp - py) / dt) *
             spdNorm *
-            (1 - idleW * (lifeAlive[i] ? 0 : 0.85));
+            (1 - idleW * (lifeAlive[i] ? 0.85 : 0));
           pos[i * 2] = nxp;
           pos[i * 2 + 1] = nyp;
         }

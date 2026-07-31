@@ -1,5 +1,8 @@
 # CHANGELOG
 
+Decided by: user, 2026-07-31 — Conway life reads better as empty space moving through a filled grid than as filled space in an empty grid
+
+- 2026-07-31: inverted lifeAlive render toggle — alive cells dim to near-empty, dead cells stay the visible dot grid; existing radial migration now drifts voids outward instead of bright blobs
 Decided by: user, 2026-07-31 — no lines anywhere, thinking-link trail becomes a dot chain (gl.POINTS), fixed a stale stride*3 subarray bug in the same pass
 
 - 2026-07-31: thinking-link bezier now gl.POINTS trail instead of gl.LINES stroke — BEZ_SEG+1 point sprites per link, alternate-dot fade replaces alternate-segment fade; fixed lineData.subarray(0, lineVerts*3) left over from the stride-4 hue change, was truncating/misreading the buffer
