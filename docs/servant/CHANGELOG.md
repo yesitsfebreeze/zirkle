@@ -1,5 +1,10 @@
 # CHANGELOG
 
+Decided by: user, 2026-07-31 — slow dots genuinely blur (sprite grows so the falloff has room to read), and the full vortex rotates at half speed
+
+- 2026-07-31: gl_PointSize is now velocity-driven — `uSize * mix(2.6, 1.0, sharp)`, so a still dot renders 8.3px against a moving dot's 3.2px. The defocus added in aa32749 was invisible because a 3.2px sprite has no room to spread a soft edge into; widening the smoothstep alone could not fix that. Inner edge also extended to `mix(-0.15, 0.42, sharp)` and the result normalised by `smoothstep(0.5, e1, 0.0)` so the softer falloff does not erode the 75% opacity floor — verified peak alpha is exactly 0.75 at rest and rises to 1.00 at speed, with the divisor bounded 0.86–1.00 so it can never be zero.
+- 2026-07-31: tspd 950–1070 → 475–535 px/s, exactly half. Feeds both wAng (slot rotation) and sv (tangential tracking), so the whole vortex halves proportionally; spinS's cs boost is unchanged and still multiplies on top.
+
 Decided by: user, 2026-07-31 — vortex collapse point is the circle's own radius rather than proximity to the centre, plus hot-loop performance work
 
 - 2026-07-31: vmTarget remapped from `(R - md)/(R - RT)` to `(VM_OUTER - md)/(VM_OUTER - R)` with VM_OUTER = R*2.2 set in layout — the full fast circle is now drawn the moment the cursor reaches R (was only at 0.35R, deep inside); past R, depth drives cs alone and vm stays pinned at 1. RT keeps its old value but is now purely the cs depth reference.
