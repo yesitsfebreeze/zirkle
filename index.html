@@ -161,25 +161,76 @@
       const lineVertSrc = `#version 300 es
       in vec2 aPos;
       in float aAlpha;
+      in float aHue;
       uniform vec2 uRes;
       out float vAlpha;
+      out float vHue;
       void main() {
         vec2 clip = (aPos / uRes) * 2.0 - 1.0;
         gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);
         vAlpha = aAlpha;
+        vHue = aHue;
+      }`;
+      const hueFn = `
+      vec3 hue2rgb(float h) {
+        vec3 k = vec3(1.0, 2.0/3.0, 1.0/3.0);
+        vec3 p = abs(fract(h + k) * 6.0 - 3.0);
+        return clamp(p - 1.0, 0.0, 1.0);
       }`;
       const lineFragSrc = `#version 300 es
       precision highp float;
       in float vAlpha;
+      in float vHue;
       out vec4 fragColor;
-      void main() { fragColor = vec4(vec3(0.8) * vAlpha, vAlpha); }`;
+      ${hueFn}
+      void main() { fragColor = vec4(hue2rgb(vHue) * vAlpha, vAlpha); }`;
       const lineProg = gl.createProgram();
       gl.bindAttribLocation(lineProg, 0, "aPos");
       gl.bindAttribLocation(lineProg, 1, "aAlpha");
+      gl.bindAttribLocation(lineProg, 2, "aHue");
       gl.attachShader(lineProg, compile(gl.VERTEX_SHADER, lineVertSrc));
       gl.attachShader(lineProg, compile(gl.FRAGMENT_SHADER, lineFragSrc));
       gl.linkProgram(lineProg);
       const uResL = gl.getUniformLocation(lineProg, "uRes");
+
+      // Orbs — one glowing point per active link, riding its bezier
+      // at the link's own age/life progress, same hue as the line
+      const orbVertSrc = `#version 300 es
+      in vec2 aPos;
+      in float aAlpha;
+      in float aHue;
+      uniform vec2 uRes;
+      uniform float uSize;
+      out float vAlpha;
+      out float vHue;
+      void main() {
+        vec2 clip = (aPos / uRes) * 2.0 - 1.0;
+        gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);
+        gl_PointSize = uSize;
+        vAlpha = aAlpha;
+        vHue = aHue;
+      }`;
+      const orbFragSrc = `#version 300 es
+      precision highp float;
+      in float vAlpha;
+      in float vHue;
+      out vec4 fragColor;
+      ${hueFn}
+      void main() {
+        float d = length(gl_PointCoord - 0.5);
+        float glow = smoothstep(0.5, 0.0, d);
+        fragColor = vec4(hue2rgb(vHue) * glow * vAlpha * 1.6, glow * vAlpha);
+      }`;
+      const orbProg = gl.createProgram();
+      gl.bindAttribLocation(orbProg, 0, "aPos");
+      gl.bindAttribLocation(orbProg, 1, "aAlpha");
+      gl.bindAttribLocation(orbProg, 2, "aHue");
+      gl.attachShader(orbProg, compile(gl.VERTEX_SHADER, orbVertSrc));
+      gl.attachShader(orbProg, compile(gl.FRAGMENT_SHADER, orbFragSrc));
+      gl.linkProgram(orbProg);
+      const uResO = gl.getUniformLocation(orbProg, "uRes");
+      const uSizeO = gl.getUniformLocation(orbProg, "uSize");
+      const orbVbo = gl.createBuffer();
 
       // Fade pass — translucent background quad instead of a hard
       // clear leaves decaying ghost trails behind fast dots
@@ -315,6 +366,7 @@
             linkB[slot] = j;
             linkAge[slot] = 0;
             linkLife[slot] = (1.2 + Math.random() * 1.4) * (1 - core * 0.92);
+            linkHue[slot] = Math.random();
             return;
           }
         }
@@ -493,7 +545,7 @@
 
       // Thinking links — random pairs flash a line, then ease out fast
       let MAX_LINKS = 80; // fixed count, always active — frequency varies, count doesn't
-      let linkA, linkB, linkAge, linkLife, lineData;
+      let linkA, linkB, linkAge, linkLife, linkHue, lineData, orbData;
       // Quadratic bezier per link, elbowed at a grid-axis corner —
       // tessellated into straight segments for gl.LINES
       const BEZ_SEG = 10;
@@ -503,7 +555,9 @@
         linkB = new Int32Array(MAX_LINKS);
         linkAge = new Float32Array(MAX_LINKS);
         linkLife = new Float32Array(MAX_LINKS); // always > 0 — no free/dead slot
-        lineData = new Float32Array(MAX_LINKS * BEZ_SEG * 2 * 3); // x,y,alpha per vertex
+        linkHue = new Float32Array(MAX_LINKS);
+        lineData = new Float32Array(MAX_LINKS * BEZ_SEG * 2 * 4); // x,y,alpha,hue per vertex
+        orbData = new Float32Array(MAX_LINKS * 4); // x,y,alpha,hue per orb
       }
       allocLinkArrays();
 
@@ -980,6 +1034,7 @@
         // Age links, build bezier vertices — smooth symmetric bell
         // envelope: eases in as gently as it eases out, no flash
         let lineVerts = 0;
+        let orbCount = 0;
         for (let s = 0; s < MAX_LINKS; s++) {
           linkAge[s] += dt;
           const p = linkAge[s] / linkLife[s];
@@ -1024,6 +1079,16 @@
             cx = CX + Math.cos(bAng) * clearR;
             cy = CY + Math.sin(bAng) * clearR;
           }
+          const hue = linkHue[s];
+          // Orb rides the same curve at the link's own age/life progress
+          const muO = 1 - p;
+          const oo = orbCount * 4;
+          orbData[oo] = muO * muO * x0 + 2 * muO * p * cx + p * p * x2;
+          orbData[oo + 1] = muO * muO * y0 + 2 * muO * p * cy + p * p * y2;
+          orbData[oo + 2] = a;
+          orbData[oo + 3] = hue;
+          orbCount++;
+
           let px = x0,
             py = y0;
           // Every other tessellation segment fades out as the vortex
@@ -1035,13 +1100,15 @@
             const bx = mu * mu * x0 + 2 * mu * u * cx + u * u * x2;
             const by = mu * mu * y0 + 2 * mu * u * cy + u * u * y2;
             const segA = t & 1 ? a * (1 - vm) : a;
-            const o = lineVerts * 3;
+            const o = lineVerts * 4;
             lineData[o] = px;
             lineData[o + 1] = py;
             lineData[o + 2] = segA;
-            lineData[o + 3] = bx;
-            lineData[o + 4] = by;
-            lineData[o + 5] = segA;
+            lineData[o + 3] = hue;
+            lineData[o + 4] = bx;
+            lineData[o + 5] = by;
+            lineData[o + 6] = segA;
+            lineData[o + 7] = hue;
             lineVerts += 2;
             px = bx;
             py = by;
@@ -1074,10 +1141,31 @@
             gl.DYNAMIC_DRAW,
           );
           gl.enableVertexAttribArray(0);
-          gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 12, 0);
+          gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 16, 0);
           gl.enableVertexAttribArray(1);
-          gl.vertexAttribPointer(1, 1, gl.FLOAT, false, 12, 8);
+          gl.vertexAttribPointer(1, 1, gl.FLOAT, false, 16, 8);
+          gl.enableVertexAttribArray(2);
+          gl.vertexAttribPointer(2, 1, gl.FLOAT, false, 16, 12);
           gl.drawArrays(gl.LINES, 0, lineVerts);
+        }
+
+        if (orbCount > 0) {
+          gl.useProgram(orbProg);
+          gl.uniform2f(uResO, W, H);
+          gl.uniform1f(uSizeO, 7 * DPR);
+          gl.bindBuffer(gl.ARRAY_BUFFER, orbVbo);
+          gl.bufferData(
+            gl.ARRAY_BUFFER,
+            orbData.subarray(0, orbCount * 4),
+            gl.DYNAMIC_DRAW,
+          );
+          gl.enableVertexAttribArray(0);
+          gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 16, 0);
+          gl.enableVertexAttribArray(1);
+          gl.vertexAttribPointer(1, 1, gl.FLOAT, false, 16, 8);
+          gl.enableVertexAttribArray(2);
+          gl.vertexAttribPointer(2, 1, gl.FLOAT, false, 16, 12);
+          gl.drawArrays(gl.POINTS, 0, orbCount);
         }
 
         gl.useProgram(prog);
