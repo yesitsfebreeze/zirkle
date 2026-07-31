@@ -92,7 +92,11 @@
       }
       p.line3 {
         /* Sans against the serif wordmark — the pairing is the point */
-        font-family: "Monda", -apple-system, "Segoe UI", sans-serif;
+        font-family:
+          "Monda",
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
         font-size: clamp(0.6rem, 1.2vw, 0.78rem);
         letter-spacing: 0.4em;
         margin-right: -0.4em;
@@ -598,7 +602,6 @@
       const vbo = gl.createBuffer();
       const speedVbo = gl.createBuffer();
 
-
       // Thinking links — random pairs flash a line, then ease out fast
       let MAX_LINKS = 80; // fixed count, always active — frequency varies, count doesn't
       let linkA, linkB, linkAge, linkLife, orbData, lineData;
@@ -925,10 +928,7 @@
         // circle completes close to the middle without needing the
         // cursor dead on it. Past VM_INNER only cs keeps moving.
         const vmTarget = mouseOver
-          ? Math.min(
-              1,
-              Math.max(0, (VM_OUTER - md) / (VM_OUTER - VM_INNER)),
-            )
+          ? Math.min(1, Math.max(0, (VM_OUTER - md) / (VM_OUTER - VM_INNER)))
           : 0;
         vortexMix += (vmTarget - vortexMix) * (1 - Math.exp(-dt * 14));
         const vm = vortexMix;
@@ -1245,9 +1245,9 @@
           const mvx = nxp - px,
             mvy = nyp - py;
           speedBuf[i] =
-            ((Math.sqrt(mvx * mvx + mvy * mvy) / dt) *
-              spdNorm *
-              (1 - idleW * lv * 0.85));
+            (Math.sqrt(mvx * mvx + mvy * mvy) / dt) *
+            spdNorm *
+            (1 - idleW * lv * 0.85);
           pos[i * 2] = nxp;
           pos[i * 2 + 1] = nyp;
         }
