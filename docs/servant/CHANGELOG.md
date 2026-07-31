@@ -1,5 +1,9 @@
 # CHANGELOG
 
+Decided by: user, 2026-07-31 — a link is one solid dot walking its bezier, not a trail: each orb waits its own random delay before departing, Conway ticks ~3.4x slower, and no dot ever falls below 0.5 opacity
+
+- 2026-07-31: bezier trail removed entirely — lineProg/lineVertSrc/lineFragSrc/lineData/lineVbo/BEZ_SEG deleted, orb is the only per-link geometry; orb alpha is flat 1.0 (bell envelope dropped), odd slots still fade out with the vortex; linkAge starts negative (−LINK_DELAY_MAX·rand) so each orb holds before departing; LIFE_STEP_T 0.16→0.55s, randomize range 0.08–0.3→0.4–0.9; particle shader velocity-opacity floor 0.15→0.5
+
 Decided by: user, 2026-07-31 — slogan hierarchy: zirkle big and centered, "We come, full" muted prefix, soon™ bare superscript (parens were only markup notation)
 
 - 2026-07-31: dropped parens around soon™; line2 zirkle clamp(3rem,9vw,7rem) at 0.92 alpha, prefix line 0.4 alpha, sup 0.3em

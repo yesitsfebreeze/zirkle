@@ -133,7 +133,7 @@
         float b = 0.3 + 0.8 * clamp(vSpeed, 0.0, 1.8);
         // Opacity rides velocity too — still dots fade back, moving
         // dots come forward; floor keeps the idle grid readable
-        float vo = 0.15 + 0.85 * clamp(vSpeed, 0.0, 1.0);
+        float vo = 0.5 + 0.5 * clamp(vSpeed, 0.0, 1.0);
         float am = max(ar, max(ag, ab)) * vo;
         fragColor = vec4(vec3(ar, ag, ab) * b * vo, am);
       }`;
@@ -163,46 +163,8 @@
         vec3 p = abs(fract(h + k) * 6.0 - 3.0);
         return clamp(p - 1.0, 0.0, 1.0);
       }`;
-      // Thinking-link trail — point sprites tracing the bezier, never
-      // a connected stroke: everything on screen is a dot
-      const lineVertSrc = `#version 300 es
-      in vec2 aPos;
-      in float aAlpha;
-      in float aHue;
-      uniform vec2 uRes;
-      uniform float uSize;
-      out float vAlpha;
-      out float vHue;
-      void main() {
-        vec2 clip = (aPos / uRes) * 2.0 - 1.0;
-        gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);
-        gl_PointSize = uSize;
-        vAlpha = aAlpha;
-        vHue = aHue;
-      }`;
-      const lineFragSrc = `#version 300 es
-      precision highp float;
-      in float vAlpha;
-      in float vHue;
-      out vec4 fragColor;
-      ${hueFn}
-      void main() {
-        float d = length(gl_PointCoord - 0.5);
-        float glow = smoothstep(0.5, 0.0, d);
-        fragColor = vec4(hue2rgb(vHue) * glow * vAlpha, glow * vAlpha);
-      }`;
-      const lineProg = gl.createProgram();
-      gl.bindAttribLocation(lineProg, 0, "aPos");
-      gl.bindAttribLocation(lineProg, 1, "aAlpha");
-      gl.bindAttribLocation(lineProg, 2, "aHue");
-      gl.attachShader(lineProg, compile(gl.VERTEX_SHADER, lineVertSrc));
-      gl.attachShader(lineProg, compile(gl.FRAGMENT_SHADER, lineFragSrc));
-      gl.linkProgram(lineProg);
-      const uResL = gl.getUniformLocation(lineProg, "uRes");
-      const uSizeL = gl.getUniformLocation(lineProg, "uSize");
-
-      // Orbs — one glowing point per active link, riding its bezier
-      // at the link's own age/life progress, same hue as the line
+      // Orbs — the only thing a link ever draws: one solid point per
+      // link, riding its bezier at the link's own age/life progress
       const orbVertSrc = `#version 300 es
       in vec2 aPos;
       in float aAlpha;
@@ -275,7 +237,7 @@
       // can re-roll them; layout() picks up the new values on rebuild.
       let SPACING = 26; // grid cell size
       let RADIUS_CSS = 340; // vortex circle radius around logo
-      let LIFE_STEP_T = 0.16; // conway tick interval, seconds
+      let LIFE_STEP_T = 0.55; // conway tick interval, seconds
       let LIFE_RINGS = 3; // concentric seed bands
       let SEP_R_CSS = 14; // soft evasion radius
       let COLL_R_CSS = 7; // hard bounce radius
@@ -372,7 +334,9 @@
           if (d2 > lo * lo && d2 < hi * hi) {
             linkA[slot] = i;
             linkB[slot] = j;
-            linkAge[slot] = 0;
+            // Negative age is a dead wait: the orb holds off until its
+            // own random delay elapses, so links never depart in step
+            linkAge[slot] = -Math.random() * LINK_DELAY_MAX;
             // 2.5x longer life — the orb rides its bezier at p=age/life,
             // so a longer life is directly a slower, calmer glide
             linkLife[slot] = (3.0 + Math.random() * 3.5) * (1 - core * 0.92);
@@ -422,7 +386,7 @@
       function initLinks() {
         for (let s = 0; s < MAX_LINKS; s++) {
           respawnLink(s, 0);
-          linkAge[s] = Math.random() * linkLife[s]; // stagger phase
+          linkAge[s] = (Math.random() * 2 - 1) * linkLife[s]; // stagger phase + delay
         }
       }
 
@@ -565,18 +529,16 @@
 
       // Thinking links — random pairs flash a line, then ease out fast
       let MAX_LINKS = 80; // fixed count, always active — frequency varies, count doesn't
-      let linkA, linkB, linkAge, linkLife, linkHue, lineData, orbData;
+      let linkA, linkB, linkAge, linkLife, linkHue, orbData;
       // Quadratic bezier per link, elbowed at a grid-axis corner —
-      // tessellated into a trail of point sprites, never a stroke
-      const BEZ_SEG = 10;
-      const lineVbo = gl.createBuffer();
+      // walked by a single orb, never drawn as a stroke or a trail
+      const LINK_DELAY_MAX = 4.0; // longest random hold before an orb departs
       function allocLinkArrays() {
         linkA = new Int32Array(MAX_LINKS);
         linkB = new Int32Array(MAX_LINKS);
         linkAge = new Float32Array(MAX_LINKS);
         linkLife = new Float32Array(MAX_LINKS); // always > 0 — no free/dead slot
         linkHue = new Float32Array(MAX_LINKS);
-        lineData = new Float32Array(MAX_LINKS * (BEZ_SEG + 1) * 4); // x,y,alpha,hue per dot
         orbData = new Float32Array(MAX_LINKS * 4); // x,y,alpha,hue per orb
       }
       allocLinkArrays();
@@ -702,7 +664,7 @@
       function randomizeParams() {
         const rnd = (lo, hi) => lo + Math.random() * (hi - lo);
         SPACING = Math.round(rnd(18, 40));
-        LIFE_STEP_T = rnd(0.08, 0.3);
+        LIFE_STEP_T = rnd(0.4, 0.9);
         LIFE_RINGS = Math.round(rnd(1, 6));
         SEP_R_CSS = Math.round(rnd(8, 22));
         COLL_R_CSS = Math.round(rnd(4, Math.min(12, SEP_R_CSS - 1)));
@@ -1055,9 +1017,7 @@
           pos[i * 2 + 1] = nyp;
         }
 
-        // Age links, build bezier vertices — smooth symmetric bell
-        // envelope: eases in as gently as it eases out, no flash
-        let lineVerts = 0;
+        // Age links, place one orb per link on its bezier
         let orbCount = 0;
         for (let s = 0; s < MAX_LINKS; s++) {
           linkAge[s] += dt;
@@ -1066,10 +1026,10 @@
             respawnLink(s, core);
             continue;
           }
-          const bell = p * (1 - p) * 4; // 0→1→0, symmetric
-          // Half the pool (odd slots) fades out as the vortex engages —
-          // exactly half the lines remain once fully in circle mode
-          const a = bell * bell * 0.4 * (s & 1 ? 1 - vm : 1);
+          if (p < 0) continue; // still inside its random departure delay
+          // Solid dot, no envelope — half the pool (odd slots) drops
+          // out as the vortex engages, the rest stay at full opacity
+          const a = s & 1 ? 1 - vm : 1;
           if (a <= 0.0015) continue;
           const ia = linkA[s],
             ib = linkB[s];
@@ -1112,28 +1072,6 @@
           orbData[oo + 2] = a;
           orbData[oo + 3] = hue;
           orbCount++;
-
-          const o0 = lineVerts * 4;
-          lineData[o0] = x0;
-          lineData[o0 + 1] = y0;
-          lineData[o0 + 2] = a;
-          lineData[o0 + 3] = hue;
-          lineVerts++;
-          // Every other dot fades out as the vortex engages — solid
-          // trail at idle, sparser dots on the closed circle
-          for (let t = 1; t <= BEZ_SEG; t++) {
-            const u = t / BEZ_SEG,
-              mu = 1 - u;
-            const bx = mu * mu * x0 + 2 * mu * u * cx + u * u * x2;
-            const by = mu * mu * y0 + 2 * mu * u * cy + u * u * y2;
-            const segA = t & 1 ? a * (1 - vm) : a;
-            const o = lineVerts * 4;
-            lineData[o] = bx;
-            lineData[o + 1] = by;
-            lineData[o + 2] = segA;
-            lineData[o + 3] = hue;
-            lineVerts++;
-          }
         }
 
         if (vm > 0.02) {
@@ -1150,25 +1088,6 @@
         } else {
           gl.clearColor(0.04, 0.04, 0.05, 1.0);
           gl.clear(gl.COLOR_BUFFER_BIT);
-        }
-
-        if (lineVerts > 0) {
-          gl.useProgram(lineProg);
-          gl.uniform2f(uResL, W, H);
-          gl.uniform1f(uSizeL, 3 * DPR);
-          gl.bindBuffer(gl.ARRAY_BUFFER, lineVbo);
-          gl.bufferData(
-            gl.ARRAY_BUFFER,
-            lineData.subarray(0, lineVerts * 4),
-            gl.DYNAMIC_DRAW,
-          );
-          gl.enableVertexAttribArray(0);
-          gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 16, 0);
-          gl.enableVertexAttribArray(1);
-          gl.vertexAttribPointer(1, 1, gl.FLOAT, false, 16, 8);
-          gl.enableVertexAttribArray(2);
-          gl.vertexAttribPointer(2, 1, gl.FLOAT, false, 16, 12);
-          gl.drawArrays(gl.POINTS, 0, lineVerts);
         }
 
         if (orbCount > 0) {
