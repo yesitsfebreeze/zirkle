@@ -1,5 +1,9 @@
 # CHANGELOG
 
+Decided by: user, 2026-07-31 — cursor-to-center distance gets a 0.001 floor so a dead-center cursor can never collapse the grid
+
+- 2026-07-31: `md` (mouse→center distance) wrapped in Math.max(0.001, …) — the only unguarded center radius; every other one (rr, rE, r, rl) already carried a +1e-3 epsilon
+
 Decided by: user, 2026-07-31 — Conway slower again and no pulsing: cells crossfade linearly over a whole tick instead of snapping, so the grid is never holding a frame
 
 - 2026-07-31: added per-dot lifeMix Float32Array walked linearly at dt/LIFE_STEP_T toward the 0/1 board state — replaces the hard `lifeAlive[i] ? 0.85 : 0` opacity switch that caused the pulse; LIFE_STEP_T 0.55→1.2s, randomize 0.4–0.9→0.9–1.8; link board decoupled onto its own LINK_STEP_T (0.55s, randomize 0.4–0.9) so slowing conway no longer starves link re-pairing
