@@ -2,6 +2,7 @@
 
 Decided by: user, 2026-07-31 — ghost text goes solid and hands over to the dots earlier, dots double in size, logo sampled at higher resolution
 
+- 2026-08-01: torus hole — INNER_RADIUS_RATIO 1/PHI (0.618, ring 0.382 thick) → 1 - 1/PHI**3 (0.764, ring 0.236 thick): the golden ratio applied to the thickness once more, ring thinner by exactly PHI. Decided by: user (less thickness on the outside).
 - 2026-07-31: overlay text colour → pure #fff on both lines. No JS is needed for the inverted scene: body.invert's filter turns pure white into pure black for free. Opacity is now driven from the frame loop as `--textfade` = 1 - textMix on .stack, quantised to 25 steps — solid in the grid scene, fully transparent by the time the dots hold the shape.
 - 2026-07-31: dead zone widened — RT R*0.35 → R*0.55 and DEAD_R R*0.06 → R*0.18 (119→187px and 20→61px at R=340). The logo starts forming 1.6x sooner and is frozen complete across a 3x wider band. Checked DEAD_R (61px) still sits inside VM_INNER (68px), so vm continues to reach 1.00 and the ring still completes.
 - 2026-07-31: DOT_PX 2 → 4. Fill per dot 4 → 16 fragments, still only 0.05M per frame at 3108 dots.

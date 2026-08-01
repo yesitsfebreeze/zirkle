@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>zirkle</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #f2eee6;
+        overflow: hidden;
+      }
+      canvas {
+        display: block;
+        width: 100vw;
+        height: 100vh;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="c"></canvas>
+    <script>
+      const canvas = document.getElementById("c");
+      const ctx = canvas.getContext("2d");
+
+      const BG = "#f2eee6";
+      const MASK_BG = "#000000"; // black backdrop inside the mask so 'screen' blend mixes true RGB
+
+      // --- base torus: wavy edge (circle-wave), mouse-follow with lag (circle-o) ---
+      const WAVE_PERIOD = 1920;
+      const RADIUS_RATIO = 0.24;
+      const PHI = 1.618033988749895;
+      // Hole radius as a fraction of the outer radius. Thickness is the
+      // golden ratio applied twice: 1 - 1/PHI**3 leaves a ring 1/PHI**3
+      // (~0.236) of the outer radius — one PHI thinner than the old
+      // 1/PHI hole (~0.382 thick).
+      const INNER_RADIUS_RATIO = 1 - 1 / PHI ** 3;
+      const TILT_RATIO = 0.55; // vertical squish on both ellipses, fakes a top-down torus tilt
+      const TUBE_OFFSET_RATIO = 0.16; // inner hole shifted down, relative to outer radius, fakes tube depth
+      const POINTS = 200;
+      const AMP1 = 0.14,
+        AMP2 = 0.045,
+        SHIFT2 = 0.9;
+
+      const FOLLOW_LAG = 0.025; // 0..1 easing per frame toward mouse, smaller = more delay
+      const SQUISH_MAX = 6; // scaleAlong ceiling at slider=100, full speed (volume-conserving, dramatic)
+      const SPEED_NORM_PX = 0.02; // px-per-ms travel speed that maps to full stretch, scaled by minDim
+      const squishSlider = document.getElementById("squishSlider");
+      const squishVal = document.getElementById("squishVal");
+      let squishPct = Number(squishSlider.value);
+      squishSlider.addEventListener("input", () => {
+        squishPct = Number(squishSlider.value);
+        squishVal.textContent = squishPct;
+      });
+
+      // --- 3 rgb circles blended inside the mask: identical size, orbit-position wobble only ---
+      const RGB_CIRCLES = [
+        { color: "rgb(255,40,40)", angle: -Math.PI / 2, phase: 0 },
+        { color: "rgb(40,255,90)", angle: -Math.PI / 2 + 2.094, phase: 640 },
+        { color: "rgb(60,110,255)", angle: -Math.PI / 2 + 4.189, phase: 1280 },
+      ];
+      const RGB_RADIUS_RATIO = 0.62; // relative to base radius, identical for all 3
+      const RGB_ORBIT_RATIO = 0.42; // anchor distance from base center, relative to base radius
+      const RGB_JITTER_RATIO = 0.08; // orbit-distance wobble amount, relative to base radius
+      const RGB_JITTER_PERIOD = 900; // ms per jitter cycle
+
+      let w, h, dpr, minDim;
+      let mouseX, mouseY;
+      let cx, cy; // eased (lagging) center position
+      let lastCx, lastCy, lastT;
+
+      function onMove(e) {
+        mouseX = e.clientX;
+        mouseY = e.clientY;
+      }
+      window.addEventListener("mousemove", onMove);
+      window.addEventListener(
+        "touchmove",
+        (e) => {
+          if (e.touches[0]) onMove(e.touches[0]);
+        },
+        { passive: true },
+      );
+
+      function resize() {
+        dpr = Math.max(1, window.devicePixelRatio || 1);
+        w = window.innerWidth;
+        h = window.innerHeight;
+        canvas.width = w * dpr;
+        canvas.height = h * dpr;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        minDim = Math.min(w, h);
+      }
+      window.addEventListener("resize", resize);
+      resize();
+
+      mouseX = w / 2;
+      mouseY = h / 2;
+      cx = mouseX;
+      cy = mouseY;
+      lastCx = cx;
+      lastCy = cy;
+      lastT = performance.now();
+
+      function wobbleRadius(theta, t, r0) {
+        const p = (t % WAVE_PERIOD) / WAVE_PERIOD;
+        const envelope = Math.sin(Math.PI * p);
+        const phase = p * Math.PI * 2;
+        const wave =
+          Math.cos(theta - phase) * AMP1 +
+          Math.cos(2 * (theta - phase) + SHIFT2) * AMP2;
+        return r0 * (1 + envelope * wave);
+      }
+
+      function wobblePathInto(ccx, ccy, r0, t) {
+        for (let i = 0; i <= POINTS; i++) {
+          const theta = (i / POINTS) * Math.PI * 2;
+          const r = wobbleRadius(theta, t, r0);
+          const x = ccx + Math.cos(theta) * r;
+          const y = ccy + Math.sin(theta) * r;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+      }
+
+      function draw(t) {
+        const dt = Math.max(1, t - lastT);
+        lastT = t;
+
+        cx += (mouseX - cx) * FOLLOW_LAG;
+        cy += (mouseY - cy) * FOLLOW_LAG;
+
+        const dx = cx - lastCx;
+        const dy = cy - lastCy;
+        lastCx = cx;
+        lastCy = cy;
+
+        const travelPx = Math.hypot(dx, dy);
+        const speed = Math.min(1, travelPx / dt / (SPEED_NORM_PX * minDim));
+        const angle = travelPx > 0.05 ? Math.atan2(dy, dx) : 0;
+        const squishAmt = (squishPct / 100) * SQUISH_MAX * speed;
+        const scaleAlong = 1 + squishAmt;
+        const scalePerp = 1 / scaleAlong;
+
+        ctx.fillStyle = BG;
+        ctx.fillRect(0, 0, w, h);
+
+        const baseRadius = RADIUS_RATIO * minDim;
+
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(angle);
+        ctx.scale(scaleAlong, scalePerp);
+        ctx.rotate(-angle);
+        ctx.translate(-cx, -cy);
+
+        ctx.beginPath();
+        ctx.ellipse(
+          cx,
+          cy,
+          baseRadius,
+          baseRadius * TILT_RATIO,
+          0,
+          0,
+          Math.PI * 2,
+        );
+        ctx.ellipse(
+          cx,
+          cy + baseRadius * TUBE_OFFSET_RATIO,
+          baseRadius * INNER_RADIUS_RATIO,
+          baseRadius * INNER_RADIUS_RATIO * TILT_RATIO,
+          0,
+          0,
+          Math.PI * 2,
+          true,
+        );
+        ctx.clip("evenodd");
+
+        ctx.fillStyle = MASK_BG;
+        ctx.fillRect(0, 0, w, h);
+
+        ctx.restore();
+
+        requestAnimationFrame(draw);
+      }
+      requestAnimationFrame(draw);
+    </script>
+  </body>
+</html>
