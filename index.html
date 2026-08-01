@@ -135,7 +135,7 @@
       // always. Constant size means no per-dot size math, no gl_PointCoord
       // work in the fragment stage, and a fixed 4-fragment fill cost per
       // dot. Brightness is the only channel that varies.
-      const DOT_PX = 4;
+      const DOT_PX = 2;
 
       const vertSrc = `#version 300 es
       in vec2 aPos;
