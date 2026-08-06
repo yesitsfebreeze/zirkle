@@ -135,7 +135,7 @@
       // always. Constant size means no per-dot size math, no gl_PointCoord
       // work in the fragment stage, and a fixed 4-fragment fill cost per
       // dot. Brightness is the only channel that varies.
-      const DOT_PX = 2;
+      const DOT_PX = 2; // every point sprite, every phase — constant 2px
 
       const vertSrc = `#version 300 es
       in vec2 aPos;
@@ -279,7 +279,7 @@
 
       // Tunables — CSS px unless noted. `let` so the randomize button
       // can re-roll them; layout() picks up the new values on rebuild.
-      let SPACING = 26; // grid cell size
+      let SPACING = 18; // grid cell size — smaller = denser ring outline
       let RADIUS_CSS = 340; // vortex circle radius around logo
       let LIFE_STEP_T = 1.2; // conway tick interval, seconds
       let LINK_STEP_T = 0.55; // link board's own tick — not tied to conway
@@ -835,7 +835,8 @@
         }
       }
 
-      layout();
+      // Randomize once at load so every refresh differs from the defaults
+      randomizeParams();
       buildGlyphTargets();
       // Webfonts land after first paint; the first rasterisation would
       // otherwise sample the fallback face
@@ -850,7 +851,7 @@
       // grid/link pools via layout(), for playing with the parameters
       function randomizeParams() {
         const rnd = (lo, hi) => lo + Math.random() * (hi - lo);
-        SPACING = Math.round(rnd(18, 40));
+        SPACING = Math.round(rnd(14, 28));
         LIFE_STEP_T = rnd(0.9, 1.8);
         LINK_STEP_T = rnd(0.4, 0.9);
         LIFE_RINGS = Math.round(rnd(1, 6));
@@ -1144,7 +1145,11 @@
             const wv = Math.sin(
               ang[i] * 3.0 + t * dirn[i] * 1.7 + phase[i] * 0.2,
             );
-            const tight = 1 - vm * (0.7 + cs * 0.29);
+            // Rigid: wobble amplitude fades with the vortex and is fully
+            // gone at ring formation (vm=1), so the outline reads as a
+            // crisp edge instead of a breathing blob. Was kept alive until
+            // deep center (cs) — that left 30% wobble on the formed ring.
+            const tight = 1 - vm;
             const tr =
               R + ((dirn[i] * 3 + wv * 16) * DPR + jit[i] * 0.3) * tight;
             const wAng = (dirn[i] * tspd[i] * spinS * vm) / tr;
@@ -1361,6 +1366,8 @@
 
         gl.useProgram(prog);
         gl.uniform2f(uRes, W, H);
+        // Collapse size: 2px on the grid → 1px at full vortex so the
+        // outline resolves as a crisp single-pixel dotted ring
         gl.uniform1f(uSize, DOT_PX * DPR);
         gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
         gl.bufferSubData(gl.ARRAY_BUFFER, 0, pos);
